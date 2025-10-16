@@ -3,6 +3,7 @@ import socket
 import json
 import urllib.request
 import random
+import math
 class RadioStation:
     def __init__(self, data, source="radiobrowser"):
         self.source = source
@@ -78,7 +79,7 @@ class RadioBrowserAPI:
             self.base_url = random.choice(servers)
             print(f"Using server: {self.base_url}")
         else:
-            self.base_url = "https://de1.api.radio-browser.info"
+            self._get_base_url()
     
     def _make_request(self, path, params=None, data=None):
         """Make a request to the API with proper headers"""
@@ -99,13 +100,22 @@ class RadioBrowserAPI:
         except Exception as e:
             print(f"Request error for {url}: {e}")
         return None
-        
+    
+    def _remove_duplicates_keep_highest_bitrate(self, stations):
+        """Keep only one station per name — the one with the highest bitrate"""
+        best = {}
+        for s in stations:
+            if s.name not in best or s.bitrate > best[s.name].bitrate:
+                best[s.name] = s
+        return list(best.values())
+
     def get_stations(self, limit=1000):
         """Get top stations by vote count"""
         try:
             data = self._make_request(f"/json/stations/topvote/{limit}")
             if data:
-                return [RadioStation(station) for station in data]
+                stations = [RadioStation(station) for station in data]
+                return self._remove_duplicates_keep_highest_bitrate(stations)
         except Exception as e:
             print(f"Error fetching stations: {e}")
         return []
@@ -128,7 +138,7 @@ class RadioBrowserAPI:
             
             data = self._make_request("/json/stations/search", params=params)
             if data:
-                return [RadioStation(station) for station in data]
+                return self._remove_duplicates_keep_highest_bitrate([RadioStation(station) for station in data])
         except Exception as e:
             print(f"Error searching stations: {e}")
         return []

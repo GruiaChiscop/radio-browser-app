@@ -7,126 +7,41 @@ import urllib.request
 from pathlib import Path
 import zipfile
 import tempfile
-import shutil
 from packaging import version
 import io
 import time
 import platform
-import subprocess
 import sys
-import vlc
+import json
+import os
 import accessible_output2.outputs.auto as auto
 from stream_recorder import StreamRecorder
 from radio_api import RadioStation, RadioBrowserAPI
+from SettingsDialog import SettingsDialog
 o = auto.Auto()
 
 APP_VERSION = "1.0.0"
 UPDATE_URL = "https://gruiachiscop.dev/radio-browser-accessible/update.zip"
+#We trick the app to believe that vlc is installed in the app's director
+if getattr(sys, 'frozen', False):
+    base_path = os.path.dirname(sys.executable)+"/internal/"
+    os.environ['PATH'] = base_path + os.pathsep + os.environ.get('PATH', '')
+    os.environ['VLC_PLUGIN_PATH'] = os.path.join(base_path, 'plugins')
+#os.environ['PYTHON_VLC_LIB_PATH'] = os.path.join(base_path, 'libvlc.dll')
 
+import vlc
 
-class SettingsDialog(wx.Dialog):
-    def __init__(self, parent, settings):
-        super().__init__(parent, title="Settings", size=(500, 400))
-        
-        self.settings = settings.copy()
-        
-        panel = wx.Panel(self)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # Recording directory
-        rec_box = wx.StaticBox(panel, label="Recording")
-        rec_sizer = wx.StaticBoxSizer(rec_box, wx.VERTICAL)
-        
-        rec_dir_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        rec_dir_sizer.Add(wx.StaticText(panel, label="Directory:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
-        self.rec_dir_text = wx.TextCtrl(panel, value=self.settings.get('recording_dir', ''))
-        rec_dir_sizer.Add(self.rec_dir_text, 1, wx.ALL, 5)
-        
-        browse_btn = wx.Button(panel, label="Browse...")
-        browse_btn.Bind(wx.EVT_BUTTON, self.on_browse_dir)
-        rec_dir_sizer.Add(browse_btn, 0, wx.ALL, 5)
-        
-        rec_sizer.Add(rec_dir_sizer, 0, wx.EXPAND)
-        sizer.Add(rec_sizer, 0, wx.ALL|wx.EXPAND, 5)
-        
-        # Data source
-        source_box = wx.StaticBox(panel, label="Data Source")
-        source_sizer = wx.StaticBoxSizer(source_box, wx.VERTICAL)
-        
-        self.rb_radiobrowser = wx.RadioButton(panel, label="Radio Browser", style=wx.RB_GROUP)
-        self.rb_onlineradiobox = wx.RadioButton(panel, label="Online Radio Box (experimental)")
-        
-        if self.settings.get('source', 'radiobrowser') == 'radiobrowser':
-            self.rb_radiobrowser.SetValue(True)
-        else:
-            self.rb_onlineradiobox.SetValue(True)
-        
-        source_sizer.Add(self.rb_radiobrowser, 0, wx.ALL, 5)
-        source_sizer.Add(self.rb_onlineradiobox, 0, wx.ALL, 5)
-        sizer.Add(source_sizer, 0, wx.ALL|wx.EXPAND, 5)
-        
-        # Playback
-        playback_box = wx.StaticBox(panel, label="Playback")
-        playback_sizer = wx.StaticBoxSizer(playback_box, wx.VERTICAL)
-        
-        self.autoplay_cb = wx.CheckBox(panel, label="Auto-play on selection")
-        self.autoplay_cb.SetValue(self.settings.get('autoplay', False))
-        playback_sizer.Add(self.autoplay_cb, 0, wx.ALL, 5)
-        
-        buffer_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        buffer_sizer.Add(wx.StaticText(panel, label="Buffer size (ms):"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
-        self.buffer_spin = wx.SpinCtrl(panel, value=str(self.settings.get('buffer_size', 1000)), 
-                                        min=500, max=5000, initial=self.settings.get('buffer_size', 1000))
-        buffer_sizer.Add(self.buffer_spin, 0, wx.ALL, 5)
-        playback_sizer.Add(buffer_sizer, 0, wx.EXPAND)
-        
-        sizer.Add(playback_sizer, 0, wx.ALL|wx.EXPAND, 5)
-        
-        # Updates
-        update_box = wx.StaticBox(panel, label="Updates")
-        update_sizer = wx.StaticBoxSizer(update_box, wx.VERTICAL)
-        
-        self.check_updates_cb = wx.CheckBox(panel, label="Check for updates on startup")
-        self.check_updates_cb.SetValue(self.settings.get('check_updates', True))
-        update_sizer.Add(self.check_updates_cb, 0, wx.ALL, 5)
-        
-        check_now_btn = wx.Button(panel, label="Check for Updates Now")
-        check_now_btn.Bind(wx.EVT_BUTTON, self.on_check_updates)
-        update_sizer.Add(check_now_btn, 0, wx.ALL, 5)
-        
-        sizer.Add(update_sizer, 0, wx.ALL|wx.EXPAND, 5)
-        
-        # Buttons
-        btn_sizer = wx.StdDialogButtonSizer()
-        ok_btn = wx.Button(panel, wx.ID_OK)
-        ok_btn.Bind(wx.EVT_BUTTON, self.on_ok)
-        cancel_btn = wx.Button(panel, wx.ID_CANCEL)
-        btn_sizer.AddButton(ok_btn)
-        btn_sizer.AddButton(cancel_btn)
-        btn_sizer.Realize()
-        
-        sizer.Add(btn_sizer, 0, wx.ALL|wx.EXPAND, 5)
-        
-        panel.SetSizer(sizer)
-        self.Centre()
-    
-    def on_browse_dir(self, event):
-        dlg = wx.DirDialog(self, "Choose recording directory", 
-                          defaultPath=self.rec_dir_text.GetValue())
-        if dlg.ShowModal() == wx.ID_OK:
-            self.rec_dir_text.SetValue(dlg.GetPath())
-        dlg.Destroy()
-    
-    def on_check_updates(self, event):
-        self.GetParent().check_for_updates(manual=True)
-    
-    def on_ok(self, event):
-        self.settings['recording_dir'] = self.rec_dir_text.GetValue()
-        self.settings['source'] = 'radiobrowser' if self.rb_radiobrowser.GetValue() else 'onlineradiobox'
-        self.settings['autoplay'] = self.autoplay_cb.GetValue()
-        self.settings['buffer_size'] = self.buffer_spin.GetValue()
-        self.settings['check_updates'] = self.check_updates_cb.GetValue()
-        self.EndModal(wx.ID_OK)
+class LiveRegion(wx.Accessible):
+    def __init__(self, win):
+        super().__init__(win)
+        self.text = ""
+
+    def GetName(self, childId):
+        return self.text, wx.ACC_OK
+    def SetText(self, text):
+        self.text = text
+        wx.Accessible.NotifyEvent(wx.ACC_EVENT_OBJECT_NAMECHANGE, self.GetWindow(), wx.OBJID_CLIENT, 0)
+
 
 class RadioPlayerFrame(wx.Frame):
     def __init__(self):
@@ -158,12 +73,12 @@ class RadioPlayerFrame(wx.Frame):
         # Settings
         self.settings = self.load_settings()
         
-        # Audio playback using vlc (but simpler than python-vlc)
-        # We'll use mpv or ffplay as subprocess
         self.is_playing = False
         self.is_muted = False
         self.volume = 0.7
-        self.playback_process = None
+        self.vlc_instance = vlc.Instance('--no-xlib')
+        self.player = self.vlc_instance.media_player_new()
+
         self.stream_thread = None
         self.stop_stream = False
         
@@ -177,9 +92,6 @@ class RadioPlayerFrame(wx.Frame):
         self.load_countries_and_languages()
         
         # Check for updates if enabled
-        if self.settings.get('check_updates', True):
-            wx.CallLater(1000, lambda: self.check_for_updates(manual=False))
-        
         self.Centre()
         self.Show()
         
@@ -301,11 +213,11 @@ class RadioPlayerFrame(wx.Frame):
         # Volume control
         volume_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        self.mute_btn = wx.Button(panel, label="🔊")
+        self.mute_btn = wx.Button(panel, label="🔊 Mute")
         self.mute_btn.Bind(wx.EVT_BUTTON, self.on_mute_toggle)
         volume_sizer.Add(self.mute_btn, 0, wx.ALL, 5)
         
-        volume_sizer.Add(wx.StaticText(panel, label="Volume:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
+        volume_sizer.Add(wx.StaticText(panel, label="&Volume:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
         
         self.volume_slider = wx.Slider(panel, value=70, minValue=0, maxValue=100, 
                                        style=wx.SL_HORIZONTAL|wx.SL_LABELS)
@@ -315,29 +227,29 @@ class RadioPlayerFrame(wx.Frame):
         main_sizer.Add(volume_sizer, 0, wx.ALL|wx.EXPAND, 5)
         control_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        self.load_btn = wx.Button(panel, label="Load Stations")
+        self.load_btn = wx.Button(panel, label="&Load Stations")
         self.load_btn.Bind(wx.EVT_BUTTON, self.on_load_stations)
         control_sizer.Add(self.load_btn, 0, wx.ALL, 5)
         
-        self.play_stop_btn = wx.Button(panel, label="▶ Play")
+        self.play_stop_btn = wx.Button(panel, label="▶ &Play")
         self.play_stop_btn.Bind(wx.EVT_BUTTON, self.on_play_stop_toggle)
         control_sizer.Add(self.play_stop_btn, 0, wx.ALL, 5)
         
         # Zapping controls
         control_sizer.Add(wx.StaticLine(panel, style=wx.LI_VERTICAL), 0, wx.EXPAND|wx.ALL, 5)
         
-        self.prev_btn = wx.Button(panel, label="◀ Previous")
+        self.prev_btn = wx.Button(panel, label="◀ P&revious")
         self.prev_btn.Bind(wx.EVT_BUTTON, self.on_previous_favorite)
         control_sizer.Add(self.prev_btn, 0, wx.ALL, 5)
         
-        self.next_btn = wx.Button(panel, label="Next ▶")
+        self.next_btn = wx.Button(panel, label="&Next ▶")
         self.next_btn.Bind(wx.EVT_BUTTON, self.on_next_favorite)
         control_sizer.Add(self.next_btn, 0, wx.ALL, 5)
         
         # Recording button
         control_sizer.Add(wx.StaticLine(panel, style=wx.LI_VERTICAL), 0, wx.EXPAND|wx.ALL, 5)
         
-        self.record_btn = wx.Button(panel, label="⏺ Start Recording")
+        self.record_btn = wx.Button(panel, label="⏺ S&tart Recording")
         self.record_btn.Bind(wx.EVT_BUTTON, self.on_record)
         control_sizer.Add(self.record_btn, 0, wx.ALL, 5)
         
@@ -351,42 +263,21 @@ class RadioPlayerFrame(wx.Frame):
         self.live_region = wx.Panel(panel)
         self.live_region.SetSize((0, 0))
         self.status_text = wx.StaticText(self.live_region, label="Ready", style=wx.ST_NO_AUTORESIZE)
+        self.accessibleLiveRegion = LiveRegion(self.status_text)
+        self.status_text.SetAccessible(self.accessibleLiveRegion)
         # Set ARIA live region
-        if hasattr(self.status_text, 'SetName'):
-            self.status_text.SetName("status")
+        #if hasattr(self.status_text, 'SetName'):
+            #self.status_text.SetName("status")
         main_sizer.Add(self.live_region, 0, wx.ALL, 0)
         
         panel.SetSizer(main_sizer)
-    
-    def prompt_media_player_install(self):
-        """Prompt user to install media player if none found"""
-        dlg = InstallDialog(self)
-        result = dlg.ShowModal()
-        dlg.Destroy()
-        
-        if result == wx.ID_OK:
-            # Check again after installation
-            if MediaPlayerInstaller.check_player_available():
-                self.set_status("Media player installed successfully")
-            else:
-                wx.MessageBox(
-                    "Media player still not found. Please restart the application after manual installation.",
-                    "Installation Issue", wx.OK | wx.ICON_WARNING
-                )
-        else:
-            wx.MessageBox(
-                "Without a media player, you won't be able to play radio streams.\n"
-                "The application will continue, but playback will not work.",
-                "Warning", wx.OK | wx.ICON_WARNING
-            )
     
     def set_status(self, message):
         """Set status bar text and announce to screen readers via live region"""
         self.status_bar.SetStatusText(message)
         # Update live region for screen readers
         self.status_text.SetLabel(message)
-        # Force update
-        self.status_text.Update()
+        self.accessibleLiveRegion.SetText(message)
     
     def on_settings(self, event):
         """Open settings dialog"""
@@ -423,7 +314,8 @@ class RadioPlayerFrame(wx.Frame):
             'source': 'radiobrowser',
             'autoplay': False,
             'buffer_size': 1000,
-            'check_updates': True
+            'check_updates': True,
+            'volume': 0.7
         }
         
         if settings_file.exists():
@@ -444,56 +336,6 @@ class RadioPlayerFrame(wx.Frame):
                 json.dump(self.settings, f, indent=2)
         except Exception as e:
             print(f"Error saving settings: {e}")
-    
-    def check_for_updates(self, manual=False):
-        """Check for updates"""
-        def check():
-            try:
-                response = requests.get(UPDATE_URL, stream=True, timeout=5)
-                if response.status_code == 200:
-                    # Check version from a version.txt in the zip
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp:
-                        tmp.write(response.content)
-                        tmp_path = tmp.name
-                    
-                    try:
-                        with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
-                            if 'version.txt' in zip_ref.namelist():
-                                version_content = zip_ref.read('version.txt').decode('utf-8').strip()
-                                if version.parse(version_content) > version.parse(APP_VERSION):
-                                    wx.CallAfter(self.show_update_dialog, version_content, tmp_path)
-                                elif manual:
-                                    wx.CallAfter(wx.MessageBox, "You have the latest version!", 
-                                               "No Updates", wx.OK | wx.ICON_INFORMATION)
-                            elif manual:
-                                wx.CallAfter(wx.MessageBox, "Unable to check version.", 
-                                           "Update Check", wx.OK | wx.ICON_WARNING)
-                    finally:
-                        if os.path.exists(tmp_path) and not manual:
-                            os.unlink(tmp_path)
-                            
-            except Exception as e:
-                print(f"Update check error: {e}")
-                if manual:
-                    wx.CallAfter(wx.MessageBox, f"Unable to check for updates: {e}", 
-                               "Update Error", wx.OK | wx.ICON_ERROR)
-        
-        thread = threading.Thread(target=check)
-        thread.daemon = True
-        thread.start()
-    
-    def show_update_dialog(self, new_version, zip_path):
-        """Show update available dialog"""
-        msg = f"A new version ({new_version}) is available!\nCurrent version: {APP_VERSION}\n\nWould you like to download it?"
-        dlg = wx.MessageDialog(self, msg, "Update Available", wx.YES_NO | wx.ICON_INFORMATION)
-        if dlg.ShowModal() == wx.ID_YES:
-            # Open download location
-            import webbrowser
-            webbrowser.open("https://gruiachiscop.dev/radio-browser-accessible/")
-        dlg.Destroy()
-        
-        if os.path.exists(zip_path):
-            os.unlink(zip_path)
     
     def load_countries_and_languages(self):
         """Load countries and languages into dropdowns"""
@@ -638,7 +480,7 @@ class RadioPlayerFrame(wx.Frame):
             thread.start()
         else:
             self.filtered_stations = self.stations[:]
-            self.update_stations_list()
+            self.update_stations_list()    
     
     def on_filter_results_loaded(self, results):
         """Called when filter search results are loaded"""
@@ -812,55 +654,14 @@ class RadioPlayerFrame(wx.Frame):
             self.now_playing_label.SetLabel(f"Playing: {station.name} ({station.location})")
             self.stream_url_label.SetLabel(f"Stream URL: {station.url}")
             
-            # Try to use available media players
-            player_cmd = None
-            
-            # Try ffplay (comes with ffmpeg)
-            if shutil.which('ffplay'):
-                volume_val = int(self.volume * 100)
-                player_cmd = ['ffplay', '-nodisp', '-autoexit', '-volume', str(volume_val), station.url]
-            # Try mpv
-            elif shutil.which('mpv'):
-                volume_val = int(self.volume * 100)
-                player_cmd = ['mpv', '--no-video', '--volume=' + str(volume_val), station.url]
-            # Try cvlc (VLC command line)
-            elif shutil.which('cvlc'):
-                volume_val = int(self.volume * 256)  # VLC uses 0-256
-                player_cmd = ['cvlc', '--no-video', '--volume', str(volume_val), station.url]
-            else:
-                # Prompt to install
-                dlg = wx.MessageDialog(
-                    self,
-                    "No media player found. Would you like to install FFmpeg now?",
-                    "Media Player Required",
-                    wx.YES_NO | wx.ICON_QUESTION
-                )
-                if dlg.ShowModal() == wx.ID_YES:
-                    self.prompt_media_player_install()
-                dlg.Destroy()
-                return
-            
-            # Start playback process
-            self.playback_process = subprocess.Popen(
-                player_cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            
+            media = self.vlc_instance.media_new(station.url)
+            buffer_size = self.settings.get('buffer_size', 1000)
+            media.add_option(f':network-caching={buffer_size}')
+            self.player.set_media(media)
+            self.player.play()
             self.is_playing = True
-            self.play_stop_btn.SetLabel("⏹ Stop")
+            self.play_stop_btn.SetLabel("⏹ &Stop")
             self.set_status(f"Playing {station.name}")
-            
-            # Monitor playback in thread
-            def monitor():
-                if self.playback_process:
-                    self.playback_process.wait()
-                    if self.is_playing:
-                        wx.CallAfter(self.set_status, "Playback ended")
-                        self.is_playing = False
-                        wx.CallAfter(self.play_stop_btn.SetLabel, "▶ Play")
-            
-            threading.Thread(target=monitor, daemon=True).start()
             
         except Exception as e:
             wx.MessageBox(f"Error playing stream: {e}\n\nStream URL: {station.url}", 
@@ -869,19 +670,12 @@ class RadioPlayerFrame(wx.Frame):
     
     def stop_playback(self):
         """Stop playback"""
-        if self.is_playing and self.playback_process:
-            try:
-                self.playback_process.terminate()
-                self.playback_process.wait(timeout=2)
-            except:
-                try:
-                    self.playback_process.kill()
-                except:
-                    pass
-            self.playback_process = None
+        if self.is_playing:
+            self.player.stop()
             self.is_playing = False
+        self.is_playing = False
         
-        self.play_stop_btn.SetLabel("▶ Play")
+        self.play_stop_btn.SetLabel("▶ &Play")
         self.now_playing_label.SetLabel("No station playing")
         self.stream_url_label.SetLabel("Stream URL: ")
         self.set_status("Stopped")
@@ -892,29 +686,22 @@ class RadioPlayerFrame(wx.Frame):
     def on_volume_change(self, event):
         """Handle volume slider change"""
         if not self.is_muted:
-            self.volume = self.volume_slider.GetValue() / 100.0
-            # If playing, restart with new volume
-            if self.is_playing and self.current_station:
-                current = self.current_station
-                self.stop_playback()
-                wx.CallLater(100, lambda: self.play_station(current))
-            self.set_status(f"Volume: {int(self.volume * 100)}%")
-    
+            self.volume = self.volume_slider.GetValue()
+            self.player.audio_set_volume(self.volume)
+            self.set_status(f"Volume: {self.volume}%")
+
+
     def on_mute_toggle(self, event):
         """Toggle mute"""
         self.is_muted = not self.is_muted
         if self.is_muted:
-            # Stop playback to mute
-            if self.is_playing and self.playback_process:
-                self.playback_process.terminate()
+            self.player.audio_set_volume(0)
             self.mute_btn.SetLabel("🔇")
             self.set_status("Muted")
         else:
-            # Resume playback
-            if self.current_station:
-                self.play_station(self.current_station)
+            self.player.audio_set_volume(self.volume)
             self.mute_btn.SetLabel("🔊")
-            self.set_status(f"Unmuted - Volume: {int(self.volume * 100)}%")
+            self.set_status(f"Unmuted - Volume: {self.volume}%")
     
     def on_previous_favorite(self, event):
         """Play previous favorite"""
