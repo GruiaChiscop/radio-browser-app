@@ -50,7 +50,8 @@ class RadioStation:
 class RadioBrowserAPI:
     def __init__(self):
         self.base_url = None
-        self._get_base_url()
+        self.on_servers_set = None
+        #self._get_base_url()
     
     def _get_radiobrowser_base_urls(self):
         """Get all base urls of all currently available radiobrowser servers"""
@@ -77,7 +78,7 @@ class RadioBrowserAPI:
         servers = self._get_radiobrowser_base_urls()
         if servers:
             self.base_url = random.choice(servers)
-            print(f"Using server: {self.base_url}")
+            self.on_servers_set(f"Using server: {self.base_url}")
         else:
             self._get_base_url()
     
@@ -175,4 +176,6 @@ class RadioBrowserAPI:
             'Oceania': ['AS', 'AU', 'CK', 'FJ', 'PF', 'GU', 'KI', 'MH', 'FM', 'NR', 'NC', 'NZ', 'NU', 'NF', 'MP', 'PW', 'PG', 'PN', 'WS', 'SB', 'TK', 'TO', 'TV', 'VU', 'WF'],
             'Antarctica': ['AQ', 'BV', 'TF', 'HM', 'GS']
         }
-        return list(continents.keys())
+        return continents
+    def get_continents_list(self):
+        return list(self.get_continents().keys())
