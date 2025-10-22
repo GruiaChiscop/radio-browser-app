@@ -241,7 +241,10 @@ class RadioPlayerFrame(wx.Frame):
         self.record_btn = wx.Button(panel, label="⏺ S&tart Recording")
         self.record_btn.Bind(wx.EVT_BUTTON, self.on_record)
         control_sizer.Add(self.record_btn, 0, wx.ALL, 5)
-        
+        #import new stations button
+        self.import_btn = wx.Button(panel, label = "&Add new station")
+        self.import_btn.Bind(wx.EVT_BUTTON, self.on_import_station)
+        control_sizer.Add(self.import_btn, 0, wx.all, 5)
         main_sizer.Add(control_sizer, 0, wx.ALL|wx.CENTER, 5)
         
         # Status bar with live region support
@@ -636,7 +639,6 @@ class RadioPlayerFrame(wx.Frame):
                     self.play_station(self.favorites[index])
     
     def play_station(self, station):
-        """Play a radio station using subprocess with ffplay or mpv"""
         try:
             # Stop current playback
             if self.is_playing:
@@ -688,11 +690,11 @@ class RadioPlayerFrame(wx.Frame):
         self.is_muted = not self.is_muted
         if self.is_muted:
             self.player.audio_set_volume(0)
-            self.mute_btn.SetLabel("🔇")
+            self.mute_btn.SetLabel("Un&mute")
             self.set_status("Muted")
         else:
             self.player.audio_set_volume(self.volume)
-            self.mute_btn.SetLabel("🔊")
+            self.mute_btn.SetLabel("&Mute")
             self.set_status(f"Unmuted - Volume: {self.volume}%")
     
     def on_previous_favorite(self, event):
@@ -778,6 +780,8 @@ class RadioPlayerFrame(wx.Frame):
             self.update_favorites_list()
             self.save_favorites()
             self.set_status(f"Removed {station.name} from favorites")
+    def on_import_station(self, event):
+        pass
     
     def save_favorites(self):
         """Save favorites to file"""
