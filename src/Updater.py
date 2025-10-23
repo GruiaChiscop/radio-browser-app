@@ -239,7 +239,7 @@ class AppUpdater:
                 return None
                 
         except requests.RequestException as e:
-            if self.parent_window:
+            if self.parent_window and show_no_update_dialog:
                 wx.MessageBox(
                     f"Failed to check for updates:\n{str(e)}",
                     "Update Check Failed",
@@ -248,7 +248,7 @@ class AppUpdater:
                 )
             return None
         except Exception as e:
-            if self.parent_window:
+            if self.parent_window and show_no_update_dialog:
                 wx.MessageBox(
                     f"Error checking for updates:\n{str(e)}",
                     "Error",
@@ -584,6 +584,19 @@ class AppUpdater:
         
         return 0
     
+    def             update(self, manual: bool = False):
+        """Check for updates and perform update if available."""
+        update_info = self.check_for_updates(show_no_update_dialog=manual)
+        if update_info:
+            user_choice = self.prompt_update(update_info)
+            if user_choice == wx.ID_OK:
+                self.download_and_install(update_info)
+            elif user_choice == wx.ID_NO:
+                # Remind later
+                pass
+            elif user_choice == wx.ID_CANCEL:
+                # Skip this version
+                pass
     def cleanup(self):
         """Clean up temporary files."""
         try:

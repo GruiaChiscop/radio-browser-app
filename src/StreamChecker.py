@@ -242,27 +242,27 @@ class StreamChecker:
         except Exception as e:
             result['reason'] = f'GET request failed: {str(e)}'
             return False, result
-    
     def _verify_stream_data(self, response: requests.Response, min_bytes: int = 1024) -> bool:
-        """Verify that stream is providing actual data."""
+        """Verify that stream is providing actual binary data (not HTML)."""
         try:
-            # Read a small chunk with timeout
-            chunk_iter = response.iter_content(chunk_size=min_bytes)
-            
-            # Use ThreadPoolExecutor for timeout control
             with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(next, chunk_iter, None)
+                future = executor.submit(lambda: b"".join(next(response.iter_content(chunk_size=min_bytes)) for _ in range(1)))
                 try:
                     chunk = future.result(timeout=5)
-                    return chunk is not None and len(chunk) > 0
+                    if not chunk:
+                        return False
+                    # Reject text-based responses (HTML, JSON, XML)
+                    if chunk.strip().startswith(b"<") or b"<!DOCTYPE html" in chunk[:200].lower():
+                        return False
+                    if b"html" in chunk[:200].lower():
+                        return False
+                    return True
                 except FuturesTimeoutError:
                     return False
-                
         except Exception:
             return False
         finally:
             response.close()
-    
     def _categorize_stream(self, content_type: str) -> str:
         """Categorize stream type based on content type."""
         if 'audio' in content_type:

@@ -18,6 +18,8 @@ import accessible_output2.outputs.auto as auto
 from stream_recorder import StreamRecorder
 from radio_api import RadioStation, RadioBrowserAPI
 from SettingsDialog import SettingsDialog
+from AddStationDialog import AddStationDialog
+import Updater
 o = auto.Auto()
 
 APP_VERSION = "1.0.0"
@@ -79,7 +81,12 @@ class RadioPlayerFrame(wx.Frame):
         self.setup_ui()
         self.api.on_servers_set = lambda message: self.set_status(message)
         self.api._get_base_url()
-
+        #initialise the updater
+        self.updater = Updater.AppUpdater(APP_VERSION, "https://gruiachiscop.dev/radio-browser-accessible/update", "radio-browser-accessible", self)
+        if self.settings.get('check_updates', True):
+            t = threading.Thread(target=self.updater.update)
+            t.daemon = True
+            t.start()
         # Load initial data
         self.load_countries_and_languages()
         
@@ -244,7 +251,7 @@ class RadioPlayerFrame(wx.Frame):
         #import new stations button
         self.import_btn = wx.Button(panel, label = "&Add new station")
         self.import_btn.Bind(wx.EVT_BUTTON, self.on_import_station)
-        control_sizer.Add(self.import_btn, 0, wx.all, 5)
+        control_sizer.Add(self.import_btn, 0, wx.ALL, 5)
         main_sizer.Add(control_sizer, 0, wx.ALL|wx.CENTER, 5)
         
         # Status bar with live region support
@@ -781,6 +788,14 @@ class RadioPlayerFrame(wx.Frame):
             self.save_favorites()
             self.set_status(f"Removed {station.name} from favorites")
     def on_import_station(self, event):
+        dlg = AddStationDialog(self)
+        if dlg.ShowModal() == wx.ID_OK:
+            new_station = dlg.get_station()
+            if new_station:
+                self.favorites.append(new_station)
+                self.update_favorites_list()
+                self.save_favorites()
+                self.set_status(f"Added new station: {new_station.name}")
         pass
     
     def save_favorites(self):

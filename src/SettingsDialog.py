@@ -95,7 +95,7 @@ class SettingsDialog(wx.Dialog):
         dlg.Destroy()
     
     def on_check_updates(self, event):
-        self.GetParent().check_for_updates(manual=True)
+        self.GetParent().updater.check_for_updates(True)
     
     def on_ok(self, event):
         self.settings['recording_dir'] = self.rec_dir_text.GetValue()
