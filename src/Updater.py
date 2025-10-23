@@ -177,7 +177,7 @@ class AppUpdater:
                  app_name: str = "Application",
                  parent_window: Optional[wx.Window] = None):
         """
-        Initialize the updater.
+        Initialise the updater.
         
         Args:
             current_version: Current application version (e.g., "1.0.0")

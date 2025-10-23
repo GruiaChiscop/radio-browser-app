@@ -61,13 +61,13 @@ class RadioPlayerFrame(wx.Frame):
         self.stations_per_page = 1000
         self.has_more_stations = False
         #continents
-        self.continentmap = self.api.get_continents()
+        self.continent_map = self.api.get_continents()
         # Settings
         self.settings = self.load_settings()
         
         self.is_playing = False
         self.is_muted = False
-        self.volume = 0.7
+        self.volume = 70
         self.vlc_instance = vlc.Instance('--no-xlib')
         self.player = self.vlc_instance.media_player_new()
 
@@ -105,11 +105,15 @@ class RadioPlayerFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_settings, settings_item)
         file_menu.AppendSeparator()
         exit_item = file_menu.Append(wx.ID_EXIT, "Exit\tCtrl+Q", "Exit application")
+        add_item = file_menu.Append(wx.ID_ADD, "Add Custom Station...\tCtrl+N", "Add a custom radio station")
+        self.Bind(wx.EVT_MENU, self.on_import_station, add_item)
         self.Bind(wx.EVT_MENU, self.on_exit, exit_item)
         menubar.Append(file_menu, "&File")
         
         help_menu = wx.Menu()
         about_item = help_menu.Append(wx.ID_ABOUT, "About", "About this application")
+        help_item = help_menu.Append(wx.ID_HELP, "Help", "Help topics")
+    
         self.Bind(wx.EVT_MENU, self.on_about, about_item)
         menubar.Append(help_menu, "&Help")
         
@@ -268,7 +272,7 @@ class RadioPlayerFrame(wx.Frame):
         #if hasattr(self.status_text, 'SetName'):
             #self.status_text.SetName("status")
         main_sizer.Add(self.live_region, 0, wx.ALL, 0)
-        
+        self.Bind(wx.EVT_CHAR_HOOK, self.on_handle_key_press)
         panel.SetSizer(main_sizer)
     
     def set_status(self, message):
@@ -372,7 +376,10 @@ class RadioPlayerFrame(wx.Frame):
             for continent in self.api.get_continents_list():
                 self.continent_choice.Append(continent)
             self.continent_choice.SetSelection(0)
-        populate()
+        # make it async
+        t = threading.Thread(target=populate)
+        t.daemon = True
+        t.start()
         self.set_status("Ready - Click 'Load Stations' to start")
     
     def on_load_stations(self, event):
@@ -836,6 +843,15 @@ class RadioPlayerFrame(wx.Frame):
                         self.update_favorites_list()
             except Exception as e:
                 print(f"Error loading favorites: {e}")
+    def on_handle_key_press(self, event: wx.KeyEvent):
+        """Handle key press events for accessibility"""
+        keycode = event.GetKeyCode()
+        if keycode == wx.WXK_F1:
+            self.on_about(None)
+        elif keycode==wx.WXK_F2:
+            o.output(f"{len(self.favorites)} are in favourites")
+        else:
+            event.Skip()
 
 if __name__ == '__main__':
     app = wx.App()
