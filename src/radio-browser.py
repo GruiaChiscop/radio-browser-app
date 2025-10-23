@@ -14,16 +14,20 @@ import platform
 import sys
 import json
 import os
-import accessible_output2.outputs.auto as auto
 from stream_recorder import StreamRecorder
 from radio_api import RadioStation, RadioBrowserAPI
-from SettingsDialog import SettingsDialog
-from AddStationDialog import AddStationDialog
-import Updater
-o = auto.Auto()
-
+from settingsDialog import SettingsDialog
+from addStationDialog import AddStationDialog
+import updater
+import process
+sr_checker = process.ScreenReaderChecker()
+if sr_checker.is_screen_reader_running():
+    import accessible_output2 as auto
+    o = auto.Auto()
+else:
+    o = None
 APP_VERSION = "1.0.0"
-UPDATE_URL = "https://gruiachiscop.dev/radio-browser-accessible/update.zip"
+UPDATE_URL = "https://gruiachiscop.dev/radio-browser-accessible/update"
 #We trick the app to believe that vlc is installed in the app's director
 if getattr(sys, 'frozen', False):
     base_path = os.path.dirname(sys.executable)+"/internal/"
@@ -148,9 +152,10 @@ class RadioPlayerFrame(wx.Frame):
         filter_sizer.Add(self.continent_choice, 0, wx.ALL, 5)
         
         # Clear filters button
-        clear_btn = wx.Button(panel, label="Clear Filters")
-        clear_btn.Bind(wx.EVT_BUTTON, self.on_clear_filters)
-        filter_sizer.Add(clear_btn, 0, wx.ALL, 5)
+        self.clear_btn = wx.Button(panel, label="Clear Filters")
+        self.clear_btn.Enable(False)
+        self.clear_btn.Bind(wx.EVT_BUTTON, self.on_clear_filters)
+        filter_sizer.Add(self.clear_btn, 0, wx.ALL, 5)
         
         # Load More button
         self.load_more_btn = wx.Button(panel, label="Load More Stations")
@@ -166,7 +171,7 @@ class RadioPlayerFrame(wx.Frame):
         # All stations tab
         self.stations_panel = wx.Panel(self.notebook)
         stations_sizer = wx.BoxSizer(wx.VERTICAL)
-        
+        stations_sizer.Add(wx.StaticText(self.stations_panel, label="Stations"), 0, wx.ALL, 5)
         self.stations_list = wx.ListCtrl(self.stations_panel, style=wx.LC_REPORT|wx.LC_SINGLE_SEL)
         self.stations_list.AppendColumn("Station Name", width=250)
         self.stations_list.AppendColumn("Location", width=150)
@@ -182,7 +187,7 @@ class RadioPlayerFrame(wx.Frame):
         # Favorites tab
         self.favorites_panel = wx.Panel(self.notebook)
         favorites_sizer = wx.BoxSizer(wx.VERTICAL)
-        
+        favorites_sizer.Add(wx.StaticText(self.favorites_panel, label="Favourite Stations"), 0, wx.ALL, 5)
         self.favorites_list = wx.ListCtrl(self.favorites_panel, style=wx.LC_REPORT|wx.LC_SINGLE_SEL)
         self.favorites_list.AppendColumn("Station Name", width=250)
         self.favorites_list.AppendColumn("Location", width=150)
@@ -208,7 +213,9 @@ class RadioPlayerFrame(wx.Frame):
         now_playing_sizer.Add(self.now_playing_label, 0, wx.ALL, 5)
         
         self.stream_url_label = wx.StaticText(panel, label="Stream URL: ")
+        self.stream_url_box = wx.TextCtrl(panel, value="", style=wx.TE_READONLY)
         now_playing_sizer.Add(self.stream_url_label, 0, wx.ALL, 5)
+        now_playing_sizer.Add(self.stream_url_box, 0, wx.ALL|wx.EXPAND, 5)
         
         main_sizer.Add(now_playing_sizer, 0, wx.ALL|wx.EXPAND, 5)
         
@@ -219,10 +226,10 @@ class RadioPlayerFrame(wx.Frame):
         self.mute_btn.Bind(wx.EVT_BUTTON, self.on_mute_toggle)
         volume_sizer.Add(self.mute_btn, 0, wx.ALL, 5)
         
-        volume_sizer.Add(wx.StaticText(panel, label="&Volume:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
+        volume_sizer.Add(wx.StaticText(panel, label="&Volume:"), 0, wx.ALL|wx.ALIGN_CENTER, 5)
         
         self.volume_slider = wx.Slider(panel, value=70, minValue=0, maxValue=100, 
-                                       style=wx.SL_HORIZONTAL|wx.SL_LABELS)
+                                       style=wx.SL_HORIZONTAL)
         self.volume_slider.Bind(wx.EVT_SLIDER, self.on_volume_change)
         volume_sizer.Add(self.volume_slider, 1, wx.ALL|wx.EXPAND, 5)
         
@@ -272,7 +279,8 @@ class RadioPlayerFrame(wx.Frame):
         #if hasattr(self.status_text, 'SetName'):
             #self.status_text.SetName("status")
         main_sizer.Add(self.live_region, 0, wx.ALL, 0)
-        self.Bind(wx.EVT_CHAR_HOOK, self.on_handle_key_press)
+        if o:
+            self.Bind(wx.EVT_CHAR_HOOK, self.on_handle_key_press)
         panel.SetSizer(main_sizer)
     
     def set_status(self, message):
@@ -281,8 +289,12 @@ class RadioPlayerFrame(wx.Frame):
         # Update live region for screen readers
         self.status_text.SetLabel(message)
         self.accessibleLiveRegion.SetText(message)
-        #since the accessible live regions doesn't seem to work, we'll use the accessible-output2 module for speech
-        o.output(message)
+        #since the accessible live regions doesn't seem to work, we'll use the accessible-output2 module for speech, if available
+        try:
+            o.output(message)
+        except:
+            pass
+    
     def on_settings(self, event):
         """Open settings dialog"""
         dlg = SettingsDialog(self, self.settings)
@@ -434,6 +446,7 @@ class RadioPlayerFrame(wx.Frame):
         self.load_btn.Enable(True)
         self.current_offset = 0
         self.apply_filters()
+        self.update_favorites_list()
         self.set_status(f"Loaded {len(self.stations)} stations")
     
     def on_more_stations_loaded(self, more_stations):
@@ -530,6 +543,7 @@ class RadioPlayerFrame(wx.Frame):
         """Handle filter change"""
         if self.stations:
             self.apply_filters()
+            self.clear_btn.Enable(True)
     
     def on_clear_filters(self, event):
         """Clear all filters"""
@@ -540,6 +554,7 @@ class RadioPlayerFrame(wx.Frame):
         self.current_offset = 0
         self.has_more_stations = False
         self.load_more_btn.Enable(False)
+        self.clear_btn.Enable(False)
         self.apply_filters()
     
     def on_station_play(self, event):
@@ -850,6 +865,8 @@ class RadioPlayerFrame(wx.Frame):
             self.on_about(None)
         elif keycode==wx.WXK_F2:
             o.output(f"{len(self.favorites)} are in favourites")
+        elif keycode == wx.WXK_F3:
+            o.output(self.GetStatusBar().GetStatusText())
         else:
             event.Skip()
 
