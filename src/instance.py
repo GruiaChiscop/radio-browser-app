@@ -2,7 +2,6 @@ import os
 import sys
 import platform
 import tempfile
-import fcntl
 import socket
 import struct
 import hashlib
@@ -137,6 +136,7 @@ class SingleInstance:
                     self._handle_already_running("File lock")
             else:
                 # Unix file locking (fcntl)
+                import fcntl
                 try:
                     fcntl.flock(self.lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                     self.is_locked = True

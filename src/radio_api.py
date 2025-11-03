@@ -51,6 +51,7 @@ class RadioBrowserAPI:
     def __init__(self):
         self.base_url = None
         self.on_servers_set = None
+        self.on_error = None
         #self._get_base_url()
     
     def _get_radiobrowser_base_urls(self):
@@ -81,7 +82,7 @@ class RadioBrowserAPI:
             self.on_servers_set(f"Using server: {self.base_url}")
         else:
             self._get_base_url()
-    
+        
     def _make_request(self, path, params=None, data=None):
         """Make a request to the API with proper headers"""
         url = f"{self.base_url}{path}"
@@ -99,7 +100,7 @@ class RadioBrowserAPI:
             if response.status_code == 200:
                 return response.json()
         except Exception as e:
-            print(f"Request error for {url}: {e}")
+            self.on_error(f"Request error for {url}: {e}")
         return None
     
     def _remove_duplicates_keep_highest_bitrate(self, stations):
@@ -118,7 +119,7 @@ class RadioBrowserAPI:
                 stations = [RadioStation(station) for station in data]
                 return self._remove_duplicates_keep_highest_bitrate(stations)
         except Exception as e:
-            print(f"Error fetching stations: {e}")
+            self.on_error(f"Error fetching stations: {e}")
         return []
     
     def search_stations(self, name="", country="", language="", offset=0, limit=1000):
@@ -141,7 +142,7 @@ class RadioBrowserAPI:
             if data:
                 return self._remove_duplicates_keep_highest_bitrate([RadioStation(station) for station in data])
         except Exception as e:
-            print(f"Error searching stations: {e}")
+            self.on_error(f"Error searching stations: {e}")
         return []
     
     def get_countries(self):
@@ -151,7 +152,7 @@ class RadioBrowserAPI:
             if data:
                 return sorted([c['name'] for c in data if c.get('name')])
         except Exception as e:
-            print(f"Error fetching countries: {e}")
+            self.on_error(f"Error fetching countries: {e}")
         return []
     
     def get_languages(self):
@@ -161,7 +162,7 @@ class RadioBrowserAPI:
             if data:
                 return sorted([l['name'] for l in data if l.get('name')])
         except Exception as e:
-            print(f"Error fetching languages: {e}")
+            self.on_error(f"Error fetching languages: {e}")
         return []
     
     def get_continents(self):

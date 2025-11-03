@@ -19,23 +19,21 @@ from radio_api import RadioStation, RadioBrowserAPI
 from settingsDialog import SettingsDialog
 from addStationDialog import AddStationDialog
 import updater
-import process
-sr_checker = process.ScreenReaderChecker()
-if sr_checker.is_screen_reader_running():
-    import accessible_output2 as auto
-    o = auto.Auto()
-else:
+import accessible_output2.outputs.auto as auto
+o = auto.Auto()
+if o.is_system_output():
     o = None
+
 APP_VERSION = "1.0.0"
 UPDATE_URL = "https://gruiachiscop.dev/radio-browser-accessible/update"
-#We trick the app to believe that vlc is installed in the app's director
+#seting up VLC environment variables for systems that do not have it installed in standard locations
 if getattr(sys, 'frozen', False):
     base_path = os.path.dirname(sys.executable)+"/internal/"
     os.environ['PATH'] = base_path + os.pathsep + os.environ.get('PATH', '')
     os.environ['VLC_PLUGIN_PATH'] = os.path.join(base_path, 'plugins')
 #os.environ['PYTHON_VLC_LIB_PATH'] = os.path.join(base_path, 'libvlc.dll')
-
 import vlc
+APP_DATA_DIR = os.environ.get('APPDATA') if platform.system() == 'Windows' else str(Path.home())
 
 class LiveRegion(wx.Accessible):
     def __init__(self, win):
@@ -84,9 +82,10 @@ class RadioPlayerFrame(wx.Frame):
         # Setup UI
         self.setup_ui()
         self.api.on_servers_set = lambda message: self.set_status(message)
+        self.api.on_error = lambda message: self.set_status(message)
         self.api._get_base_url()
         #initialise the updater
-        self.updater = Updater.AppUpdater(APP_VERSION, "https://gruiachiscop.dev/radio-browser-accessible/update", "radio-browser-accessible", self)
+        self.updater = updater.AppUpdater(APP_VERSION, UPDATE_URL, "radio-browser-accessible", self)
         if self.settings.get('check_updates', True):
             t = threading.Thread(target=self.updater.update)
             t.daemon = True
@@ -324,17 +323,17 @@ class RadioPlayerFrame(wx.Frame):
     
     def load_settings(self):
         """Load settings from file"""
-        settings_file = Path.home() / ".radio_settings.json"
+        settings_file = APP_DATA_DIR+"/.radio_settings.json"
         default_settings = {
             'recording_dir': str(Path.home() / "RadioRecordings"),
             'source': 'radiobrowser',
             'autoplay': False,
             'buffer_size': 1000,
             'check_updates': True,
-            'volume': 0.7
+            'volume': 70
         }
         
-        if settings_file.exists():
+        if os.path.exists(settings_file):
             try:
                 with open(settings_file, 'r') as f:
                     loaded = json.load(f)
@@ -346,7 +345,7 @@ class RadioPlayerFrame(wx.Frame):
     
     def save_settings(self):
         """Save settings to file"""
-        settings_file = Path.home() / ".radio_settings.json"
+        settings_file = APP_DATA_DIR+"/.radio_settings.json"
         try:
             with open(settings_file, 'w') as f:
                 json.dump(self.settings, f, indent=2)
@@ -822,7 +821,7 @@ class RadioPlayerFrame(wx.Frame):
     
     def save_favorites(self):
         """Save favorites to file"""
-        favorites_file = Path.home() / ".radio_favorites.json"
+        favorites_file = APP_DATA_DIR+"/.radio_favorites.json"
         try:
             data = []
             for fav in self.favorites:
@@ -848,8 +847,8 @@ class RadioPlayerFrame(wx.Frame):
     
     def load_favorites(self):
         """Load favorites from file"""
-        favorites_file = Path.home() / ".radio_favorites.json"
-        if favorites_file.exists():
+        favorites_file = APP_DATA_DIR+"/.radio_favorites.json"
+        if os.path.exists(favorites_file):
             try:
                 with open(favorites_file, 'r') as f:
                     data = json.load(f)
