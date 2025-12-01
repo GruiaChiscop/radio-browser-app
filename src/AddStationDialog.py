@@ -7,6 +7,7 @@ class AddStationDialog(wx.Dialog):
         self.is_stream_checked = False
         self.url = ""
         self.custom_name = ""
+        self.station = RadioStation(None, source="custom")
         panel = wx.Panel(self)
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(wx.StaticText(panel, label="Stream URL"), 0, wx.ALL, 5)
@@ -44,6 +45,7 @@ class AddStationDialog(wx.Dialog):
             wx.MessageBox("Please check the stream before adding the station.", "Warning", wx.OK | wx.ICON_WARNING)
             return
         self.custom_name = self.station_name_textCTRL.GetValue()
+        self.station.url = self.url
         if self.custom_name:
             self.station.name = f"Custom station: {self.custom_name}"
         else:

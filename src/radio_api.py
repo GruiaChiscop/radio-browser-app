@@ -1,9 +1,6 @@
 import requests
 import socket
-import json
-import urllib.request
 import random
-import math
 class RadioStation:
     def __init__(self, data, source="radiobrowser"):
         self.source = source
@@ -29,7 +26,7 @@ class RadioStation:
                 location_parts.append(self.country)
             self.location = ', '.join(location_parts) if location_parts else 'Unknown'
             
-        else:  # onlineradiobox
+        elif source=="onlineradiobox":  # onlineradiobox
             self.name = data.get('name', 'Unknown')
             self.url = data.get('url', '')
             self.country = data.get('country', 'Unknown')
@@ -43,6 +40,20 @@ class RadioStation:
             self.geo_lat = None
             self.geo_long = None
             self.location = self.country
+        else: #imported
+            self.name = ''
+            self.url = ''
+            self.country = 'unknown'
+            self.countrycode = 'unknown'
+            self.state = 'unknown'
+            self.language = 'unknown'
+            self.tags = 'unknown'
+            self.favicon = 'unknown'
+            self.bitrate = 0
+            self.codec = 'Unknown'
+            self.geo_lat = None
+            self.geo_long = None
+            self.location = 'Unknown'
         
     def __str__(self):
         return f"{self.name} - {self.country}"
@@ -160,7 +171,7 @@ class RadioBrowserAPI:
         try:
             data = self._make_request("/json/languages")
             if data:
-                return sorted([l['name'] for l in data if l.get('name')])
+                return sorted([languageName['name'] for languageName in data if languageName.get('name')])
         except Exception as e:
             self.on_error(f"Error fetching languages: {e}")
         return []
