@@ -1,1 +1,15 @@
 src/__pycache__
+src/dist
+src/build
+src/*spec
+.vscode/
+.DS_Store
+env/
+__pycache__/
+*.pyc
+*.spec
+*.pyo
+*.pyd
+build/
+dist/
+.idea/

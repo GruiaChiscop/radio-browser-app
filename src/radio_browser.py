@@ -18,7 +18,7 @@ if o.is_system_output():
     o = None
 
 APP_VERSION = "1.0.0"
-UPDATE_URL = "https://gruiachiscop.dev/radio-browser-accessible/update"
+UPDATE_URL = "https://gruiachiscop.dev/radio-browser-accessible/update/version.json"
 APP_DATA_DIR = os.environ.get('APPDATA') if platform.system() == 'Windows' else str(Path.home())
 
 class LiveRegion(wx.Accessible):
@@ -56,7 +56,6 @@ class RadioPlayerFrame(wx.Frame):
         self.is_playing = False
         self.is_muted = False
         self.volume = 1.0
-        self.stream_thread = None
         self.stop_stream = False
         # Load favorites
         self.load_favorites()
@@ -211,7 +210,7 @@ class RadioPlayerFrame(wx.Frame):
         
         volume_sizer.Add(wx.StaticText(panel, label="&Volume:"), 0, wx.ALL|wx.ALIGN_CENTER, 5)
         
-        self.volume_slider = wx.Slider(panel, value=self.volume*100, minValue=0, maxValue=100, 
+        self.volume_slider = wx.Slider(panel, value=int(self.volume), minValue=0, maxValue=100, 
                                        style=wx.SL_HORIZONTAL)
         self.volume_slider.Bind(wx.EVT_SLIDER, self.on_volume_change)
         volume_sizer.Add(self.volume_slider, 1, wx.ALL|wx.EXPAND, 5)
@@ -223,7 +222,7 @@ class RadioPlayerFrame(wx.Frame):
         self.load_btn.Bind(wx.EVT_BUTTON, self.on_load_stations)
         control_sizer.Add(self.load_btn, 0, wx.ALL, 5)
         
-        self.play_stop_btn = wx.Button(panel, label="▶ &Play")
+        self.play_stop_btn = wx.Button(panel, label="&Play")
         self.play_stop_btn.Bind(wx.EVT_BUTTON, self.on_play_stop_toggle)
         control_sizer.Add(self.play_stop_btn, 0, wx.ALL, 5)
         # Zapping controls
@@ -232,7 +231,7 @@ class RadioPlayerFrame(wx.Frame):
         self.prev_btn = wx.Button(panel, label=" P&revious")
         self.prev_btn.Bind(wx.EVT_BUTTON, self.on_previous_favorite)
         control_sizer.Add(self.prev_btn, 0, wx.ALL, 5)
-        self.next_btn = wx.Button(panel, label="&Next ▶")
+        self.next_btn = wx.Button(panel, label="&Next")
         self.next_btn.Bind(wx.EVT_BUTTON, self.on_next_favorite)
         control_sizer.Add(self.next_btn, 0, wx.ALL, 5)
         
@@ -258,9 +257,9 @@ class RadioPlayerFrame(wx.Frame):
         self.status_text = wx.StaticText(self.live_region, label="Ready", style=wx.ST_NO_AUTORESIZE)
         self.accessibleLiveRegion = LiveRegion(self.status_text)
         self.status_text.SetAccessible(self.accessibleLiveRegion)
-        # Set ARIA live region
-        #if hasattr(self.status_text, 'SetName'):
-            #self.status_text.SetName("status")
+         # Set ARIA live region
+        if hasattr(self.status_text, 'SetName'):
+            self.status_text.SetName("status")
         main_sizer.Add(self.live_region, 0, wx.ALL, 0)
         if o:
             self.Bind(wx.EVT_CHAR_HOOK, self.on_handle_key_press)
@@ -746,7 +745,7 @@ class RadioPlayerFrame(wx.Frame):
         self.recorder.start()
         self.recording = True
         
-        self.record_btn.SetLabel("⏹ Stop Recording")
+        self.record_btn.SetLabel("Stop Recording")
         self.set_status(f"Recording to: {filename}")
     
     def stop_recording(self):
@@ -756,8 +755,8 @@ class RadioPlayerFrame(wx.Frame):
             self.recorder = None
         
         self.recording = False
-        self.record_btn.SetLabel("⏺ Start Recording")
-        self.set_status("Recording stopped")
+        self.record_btn.SetLabel("Start Recording")
+        self.set_status(f"Recording stopped and saved to {self.settings.get('recording_dir', str(Path.home() / 'RadioRecordings'))}")
     
     def add_to_favorites(self, station):
         """Add station to favorites"""
@@ -833,7 +832,7 @@ class RadioPlayerFrame(wx.Frame):
         if keycode == wx.WXK_F1:
             self.on_about(None)
         elif keycode==wx.WXK_F2:
-            o.output(f"{len(self.favorites)} are in favourites")
+            o.output(f"{len(self.favorites)} stations are in favourites")
         elif keycode == wx.WXK_F3:
             o.output(self.GetStatusBar().GetStatusText())
         else:
