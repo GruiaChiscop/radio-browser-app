@@ -11,6 +11,11 @@ A minimal but fully functional radio player client that can stream any radio sta
 - It theoretically supports changing the radio database source, but I haven't actually implemented it yet, it's just a place holder.
 ### Building
 ### Requirements
+This project uses a python virtual environment (venv). While it's not mandatory, it's highly recommended.
+```bash:
+py -m venv .
+scripts/activate
+```
 In the main repository directory, you'll find a "requirements.txt" file with all the modules the client needs. Run:
 ```bash:
 pip install -r requirements.txt

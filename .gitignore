@@ -1,15 +1,12 @@
-src/__pycache__
-src/dist
-src/build
-src/*spec
-.vscode/
-.DS_Store
-env/
+# Created by venv; see https://docs.python.org/3/library/venv.html
+*
+include/
+lib/
+pyvenv.cfg
+dist/
+build/
+src/bypass/*.dll
 __pycache__/
 *.pyc
-*.spec
 *.pyo
 *.pyd
-build/
-dist/
-.idea/
