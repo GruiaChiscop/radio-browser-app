@@ -128,7 +128,7 @@ class RadioBrowserAPI:
             data = self._make_request(f"/json/stations/topvote/{limit}")
             if data:
                 stations = [RadioStation(station) for station in data]
-                return self._remove_duplicates_keep_highest_bitrate(stations)
+                return stations
         except Exception as e:
             self.on_error(f"Error fetching stations: {e}")
         return []
@@ -151,7 +151,7 @@ class RadioBrowserAPI:
             
             data = self._make_request("/json/stations/search", params=params)
             if data:
-                return self._remove_duplicates_keep_highest_bitrate([RadioStation(station) for station in data])
+                return [RadioStation(station) for station in data]
         except Exception as e:
             self.on_error(f"Error searching stations: {e}")
         return []

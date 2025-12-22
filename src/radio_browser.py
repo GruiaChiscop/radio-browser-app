@@ -17,7 +17,7 @@ o = auto.Auto()
 if o.is_system_output():
     o = None
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 UPDATE_URL = "https://gruiachiscop.dev/radio-browser-accessible/update/version.json"
 APP_DATA_DIR = os.environ.get('APPDATA') if platform.system() == 'Windows' else str(Path.home())
 

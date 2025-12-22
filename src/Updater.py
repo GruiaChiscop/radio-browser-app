@@ -80,7 +80,7 @@ class ChangelogDialog(wx.Dialog):
         # Required update warning
         if self.update_info.required:
             warning = wx.StaticText(panel, 
-                                   label="⚠ This is a required update. The application may not work correctly without it.")
+                                   label="This is a required update. The application may not work correctly without it.")
             warning.SetForegroundColour(wx.Colour(200, 0, 0))
             main_sizer.Add(warning, 0, wx.ALL, 10)
         
@@ -595,7 +595,15 @@ class AppUpdater:
                 # Remind later
                 pass
             elif user_choice == wx.ID_CANCEL:
-                # Skip this version
+                # Skip this version or close the app if the version is required
+                if update_info.required:
+                    wx.MessageBox(
+                        "This update is required. The application will now exit.",
+                        "Update Required",
+                        wx.OK | wx.ICON_WARNING,
+                        self.parent_window
+                    )
+                    self._exit_app()
                 pass
     def cleanup(self):
         """Clean up temporary files."""
