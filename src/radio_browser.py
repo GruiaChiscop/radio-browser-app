@@ -21,18 +21,6 @@ APP_VERSION = "1.1.0"
 UPDATE_URL = "https://gruiachiscop.dev/radio-browser-accessible/update/version.json"
 APP_DATA_DIR = os.environ.get('APPDATA') if platform.system() == 'Windows' else str(Path.home())
 
-class LiveRegion(wx.Accessible):
-    def __init__(self, win):
-        super().__init__(win)
-        self.text = ""
-
-    def GetName(self, childId):
-        return self.text, wx.ACC_OK
-    def SetText(self, text):
-        self.text = text
-        wx.Accessible.NotifyEvent(wx.ACC_EVENT_OBJECT_NAMECHANGE, self.GetWindow(), wx.OBJID_CLIENT, 0)
-
-
 class RadioPlayerFrame(wx.Frame):
     def __init__(self):
         super().__init__(parent=None, title='Radio Browser Player', size=(1000, 700))
@@ -159,7 +147,6 @@ class RadioPlayerFrame(wx.Frame):
         self.stations_list.AppendColumn("Location", width=150)
         self.stations_list.AppendColumn("Country", width=100)
         self.stations_list.AppendColumn("Language", width=100)
-        self.stations_list.AppendColumn("Bitrate", width=80)
         self.stations_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_station_play)
         self.stations_list.Bind(wx.EVT_CONTEXT_MENU, self.on_station_context_menu)
         
@@ -175,7 +162,6 @@ class RadioPlayerFrame(wx.Frame):
         self.favorites_list.AppendColumn("Location", width=150)
         self.favorites_list.AppendColumn("Country", width=100)
         self.favorites_list.AppendColumn("Language", width=100)
-        self.favorites_list.AppendColumn("Bitrate", width=80)
         self.favorites_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_favorite_play)
         self.favorites_list.Bind(wx.EVT_CONTEXT_MENU, self.on_favorite_context_menu)
         
@@ -210,10 +196,10 @@ class RadioPlayerFrame(wx.Frame):
         
         volume_sizer.Add(wx.StaticText(panel, label="&Volume:"), 0, wx.ALL|wx.ALIGN_CENTER, 5)
         
-        self.volume_slider = wx.Slider(panel, value=int(self.volume), minValue=0, maxValue=100, 
-                                       style=wx.SL_HORIZONTAL)
+        self.volume_slider = wx.Slider(panel, value=int(self.volume), minValue=0, maxValue=100, )
+        self.volume_slider.SetValue(self.settings.get('volume', 70))
         self.volume_slider.Bind(wx.EVT_SLIDER, self.on_volume_change)
-        volume_sizer.Add(self.volume_slider, 1, wx.ALL|wx.EXPAND, 5)
+        volume_sizer.Add(self.volume_slider, 1, wx.ALL|wx.EXPAND, 5 )
         
         main_sizer.Add(volume_sizer, 0, wx.ALL|wx.EXPAND, 5)
         control_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -255,8 +241,6 @@ class RadioPlayerFrame(wx.Frame):
         self.live_region = wx.Panel(panel)
         self.live_region.SetSize((0, 0))
         self.status_text = wx.StaticText(self.live_region, label="Ready", style=wx.ST_NO_AUTORESIZE)
-        self.accessibleLiveRegion = LiveRegion(self.status_text)
-        self.status_text.SetAccessible(self.accessibleLiveRegion)
          # Set ARIA live region
         if hasattr(self.status_text, 'SetName'):
             self.status_text.SetName("status")
@@ -270,11 +254,10 @@ class RadioPlayerFrame(wx.Frame):
         self.status_bar.SetStatusText(message)
         # Update live region for screen readers
         self.status_text.SetLabel(message)
-        self.accessibleLiveRegion.SetText(message)
-        #since the accessible live regions doesn't seem to work, we'll use the accessible-output2 module for speech, if available
+        #since the accessible live regions don't seem to work, we'll use the accessible-output2 module for speech, if available
         try:
             o.output(message)
-        except Exception:
+        except Exception   :
             pass
     
     def on_settings(self, event):

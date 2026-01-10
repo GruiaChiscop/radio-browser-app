@@ -1,86 +1,77 @@
 import threading
 import time
-from pybass import *
+from enum import Enum, auto
+from sound_lib.output import Output
+from sound_lib.stream import URLStream
+from sound_lib.main import BassError
+
+class PlayerState(Enum):
+    IDLE = auto()
+    CONNECTING = auto()
+    PLAYING = auto()
+    PAUSED = auto()
+    STOPPED = auto()
 
 class RadioPlayer:
     def __init__(self):
-        self.stream = None
+        self.state = PlayerState.IDLE
+        self.output=Output()
         self.volume = 1.0
         self.current_url = None
         self.metadata_callback = None
+        self.stream=None
 
         self._stop_metadata = threading.Event()
         self._metadata_thread = None
 
-        # Initialise BASS
-        if not BASS_Init(-1, 44100, 0, 0, 0):
-            raise RuntimeError(f"BASS_Init failed: {BASS_ErrorGetCode()}")
+    def _play_internal(self, url):
+        #this method should never be called directly
+        try:
+            self.state = PlayerState.CONNECTING
+            self.stream=URLStream(url)
+            self.stream.play()
+            time.sleep(0.2)
+            self.state = PlayerState.PLAYING
+        except Exception as e:
+            print(f"Error playing stream: {e}")
+            self.state=PlayerState.IDLE
+            self.stream=None
 
-    # ---------------------------------------------------------
-    # Play a radio URL
-    # ---------------------------------------------------------
     def play(self, url: str):
-        # Stop previous stream
         self.stop()
-
         self.current_url = url
-
-        # Create new stream
-        self.stream = BASS_StreamCreateURL(
-            url.encode(),
-            0,
-            0,
-            None,
-            0
-        )
-
-        if not self.stream:
-            raise RuntimeError(f"Could not create stream: {BASS_ErrorGetCode()}")
-
-        # Apply previous volume
-        self.set_volume(self.volume)
-
-        # Start playback
-        if not BASS_ChannelPlay(self.stream, False):
-            raise RuntimeError(f"Channel play failed: {BASS_ErrorGetCode()}")
-
-        # Start metadata thread
-        self._start_metadata_thread()
-
-    # ---------------------------------------------------------
-    # Stop playback and free the stream
-    # ---------------------------------------------------------
+        t = threading.Thread(target=self._play_internal, args=(url,), daemon=True)
+        t.start()
+        
     def stop(self):
-        if self.stream:
-            BASS_ChannelStop(self.stream)
-            BASS_StreamFree(self.stream)
-            self.stream = None
-
+        self.state=PlayerState.STOPPED
+        if self.stream is not None:
+            try:
+                self.stream.stop()
+                self.stream.free()
+            except BassError:
+                pass
+            finally:
+                self.stream=None
         self._stop_metadata_thread()
-
-    # ---------------------------------------------------------
-    # Pause / resume
-    # ---------------------------------------------------------
     def pause(self):
-        if self.stream:
-            BASS_ChannelPause(self.stream)
-
+        if self.stream is not None and  self.state==PlayerState.PLAYING:
+            self.stream.pause()
+            self.state=PlayerState.PAUSED
+    
     def resume(self):
-        if self.stream:
-            BASS_ChannelPlay(self.stream, False)
-
-    # ---------------------------------------------------------
-    # Volume 0.0 – 1.0
-    # ---------------------------------------------------------
+        if self.stream is None and self.state==PlayerState.PAUSED:
+            self.stream.play()
+            self.state=PlayerState.PLAYING
+        
     def set_volume(self, vol: float):
         self.volume = max(0.0, min(1.0, float(vol)))
-        if self.stream:
-            # BASS attribute for volume
-            BASS_ChannelSetAttribute(self.stream, BASS_ATTRIB_VOL, self.volume)
+        if self.stream is not None and self.state==PlayerState.PLAYING:
+            try:
+                self.stream.set_volume(self.volume)
+            except BassError:
+                pass
 
-    # ---------------------------------------------------------
-    # Metadata handling
-    # ---------------------------------------------------------
     def set_metadata_callback(self, callback):
         """
         callback(text: str)
@@ -101,11 +92,9 @@ class RadioPlayer:
     def _metadata_worker(self):
         last_metadata = None
         while not self._stop_metadata.is_set():
-            if not self.stream:
+            if self.state!=PlayerState.PLAYING or not self.stream:
                 break
-
-            # Get ICY metadata
-            tags = BASS_ChannelGetTags(self.stream, BASS_TAG_ICY)
+            tags = self.stream.get_tags()
             if tags:
                 text = tags.decode(errors="ignore")
 
@@ -122,4 +111,4 @@ class RadioPlayer:
     # ---------------------------------------------------------
     def close(self):
         self.stop()
-        BASS_Free()
+        self.output.free()
