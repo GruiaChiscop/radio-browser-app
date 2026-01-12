@@ -54,6 +54,7 @@ class RadioPlayerFrame(wx.Frame):
         self.radio.metadata_callback=lambda title: self.set_status(f"Now Playing: {title}"), 
         self.api.on_servers_set = lambda message: self.set_status(message)
         self.api.on_error = lambda message: self.set_status(message)
+        self.radio.set_metadata_callback(lambda title: self.set_status(f"Now Playing: {title}"))
         self.api._get_base_url()
         #initialise the updater
         self.updater = updater.AppUpdater(APP_VERSION, UPDATE_URL, "radio-browser-accessible", self)
@@ -87,7 +88,7 @@ class RadioPlayerFrame(wx.Frame):
         help_menu = wx.Menu()
         about_item = help_menu.Append(wx.ID_ABOUT, "About", "About this application")
         help_item = help_menu.Append(wx.ID_HELP, "Help", "Help topics")
-        self.Bind(wx.EVT_MENU, None, help_item)
+        self.Bind(wx.EVT_MENU, None, help_item) # Note: Ensure you have a handler for this
         self.Bind(wx.EVT_MENU, self.on_about, about_item)
         menubar.Append(help_menu, "&Help")
         
@@ -103,31 +104,20 @@ class RadioPlayerFrame(wx.Frame):
         self.search_ctrl.Bind(wx.EVT_TEXT, self.on_filter_change)
         filter_sizer.Add(self.search_ctrl, 0, wx.ALL, 5)
         
-        # Country filter
-        filter_sizer.Add(wx.StaticText(panel, label="Country:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
-        self.country_choice = wx.Choice(panel, size=(150, -1))
-        self.country_choice.Bind(wx.EVT_CHOICE, self.on_filter_change)
-        filter_sizer.Add(self.country_choice, 0, wx.ALL, 5)
+        # Choice Filters (Country, Language, Continent)
+        for label, attr in [("Country:", "country_choice"), ("Language:", "language_choice"), ("Continent:", "continent_choice")]:
+            filter_sizer.Add(wx.StaticText(panel, label=label), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
+            choice = wx.Choice(panel, size=(150, -1))
+            setattr(self, attr, choice)
+            choice.Bind(wx.EVT_CHOICE, self.on_filter_change)
+            filter_sizer.Add(choice, 0, wx.ALL, 5)
         
-        # Language filter
-        filter_sizer.Add(wx.StaticText(panel, label="Language:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
-        self.language_choice = wx.Choice(panel, size=(150, -1))
-        self.language_choice.Bind(wx.EVT_CHOICE, self.on_filter_change)
-        filter_sizer.Add(self.language_choice, 0, wx.ALL, 5)
-        
-        # Continent filter
-        filter_sizer.Add(wx.StaticText(panel, label="Continent:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
-        self.continent_choice = wx.Choice(panel, size=(150, -1))
-        self.continent_choice.Bind(wx.EVT_CHOICE, self.on_filter_change)
-        filter_sizer.Add(self.continent_choice, 0, wx.ALL, 5)
-        
-        # Clear filters button
+        # Buttons
         self.clear_btn = wx.Button(panel, label="Clear Filters")
         self.clear_btn.Enable(False)
         self.clear_btn.Bind(wx.EVT_BUTTON, self.on_clear_filters)
         filter_sizer.Add(self.clear_btn, 0, wx.ALL, 5)
         
-        # Load More button
         self.load_more_btn = wx.Button(panel, label="Load More Stations")
         self.load_more_btn.Bind(wx.EVT_BUTTON, self.on_load_more_stations)
         self.load_more_btn.Enable(False)
@@ -135,42 +125,33 @@ class RadioPlayerFrame(wx.Frame):
         
         main_sizer.Add(filter_sizer, 0, wx.ALL|wx.EXPAND, 5)
         
-        # Notebook for stations and favorites
+        # Notebook
         self.notebook = wx.Notebook(panel)
         
-        # All stations tab
-        self.stations_panel = wx.Panel(self.notebook)
-        stations_sizer = wx.BoxSizer(wx.VERTICAL)
-        stations_sizer.Add(wx.StaticText(self.stations_panel, label="Stations"), 0, wx.ALL, 5)
-        self.stations_list = wx.ListCtrl(self.stations_panel, style=wx.LC_REPORT|wx.LC_SINGLE_SEL)
-        self.stations_list.AppendColumn("Station Name", width=250)
-        self.stations_list.AppendColumn("Location", width=150)
-        self.stations_list.AppendColumn("Country", width=100)
-        self.stations_list.AppendColumn("Language", width=100)
+        # Helper to create list tabs
+        def create_list_tab(parent, label):
+            p = wx.Panel(parent)
+            sz = wx.BoxSizer(wx.VERTICAL)
+            sz.Add(wx.StaticText(p, label=label), 0, wx.ALL, 5)
+            lc = wx.ListCtrl(p, style=wx.LC_REPORT|wx.LC_SINGLE_SEL)
+            lc.AppendColumn("Station Name", width=250)
+            lc.AppendColumn("Location", width=150)
+            lc.AppendColumn("Country", width=100)
+            lc.AppendColumn("Language", width=100)
+            sz.Add(lc, 1, wx.EXPAND|wx.ALL, 5)
+            p.SetSizer(sz)
+            return p, lc
+    
+        self.stations_panel, self.stations_list = create_list_tab(self.notebook, "Stations")
         self.stations_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_station_play)
         self.stations_list.Bind(wx.EVT_CONTEXT_MENU, self.on_station_context_menu)
-        
-        stations_sizer.Add(self.stations_list, 1, wx.ALL|wx.EXPAND, 5)
-        self.stations_panel.SetSizer(stations_sizer)
-        
-        # Favorites tab
-        self.favorites_panel = wx.Panel(self.notebook)
-        favorites_sizer = wx.BoxSizer(wx.VERTICAL)
-        favorites_sizer.Add(wx.StaticText(self.favorites_panel, label="Favourite Stations"), 0, wx.ALL, 5)
-        self.favorites_list = wx.ListCtrl(self.favorites_panel, style=wx.LC_REPORT|wx.LC_SINGLE_SEL)
-        self.favorites_list.AppendColumn("Station Name", width=250)
-        self.favorites_list.AppendColumn("Location", width=150)
-        self.favorites_list.AppendColumn("Country", width=100)
-        self.favorites_list.AppendColumn("Language", width=100)
+    
+        self.favorites_panel, self.favorites_list = create_list_tab(self.notebook, "Favourite Stations")
         self.favorites_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_favorite_play)
         self.favorites_list.Bind(wx.EVT_CONTEXT_MENU, self.on_favorite_context_menu)
-        
-        favorites_sizer.Add(self.favorites_list, 1, wx.ALL|wx.EXPAND, 5)
-        self.favorites_panel.SetSizer(favorites_sizer)
-        
+    
         self.notebook.AddPage(self.stations_panel, "All Stations")
         self.notebook.AddPage(self.favorites_panel, "Favorites")
-        
         main_sizer.Add(self.notebook, 1, wx.ALL|wx.EXPAND, 5)
         
         # Now playing section
@@ -189,71 +170,55 @@ class RadioPlayerFrame(wx.Frame):
         
         # Volume control
         volume_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
         self.mute_btn = wx.Button(panel, label="&Mute")
         self.mute_btn.Bind(wx.EVT_BUTTON, self.on_mute_toggle)
         volume_sizer.Add(self.mute_btn, 0, wx.ALL, 5)
         
-        volume_sizer.Add(wx.StaticText(panel, label="&Volume:"), 0, wx.ALL|wx.ALIGN_CENTER, 5)
-        
-        self.volume_slider = wx.Slider(panel, value=int(self.volume), minValue=0, maxValue=100, )
-        self.volume_slider.SetValue(self.settings.get('volume', 70))
+        volume_sizer.Add(wx.StaticText(panel, label="&Volume:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
+        self.volume_slider = wx.Slider(panel, value=70, minValue=0, maxValue=100)
         self.volume_slider.Bind(wx.EVT_SLIDER, self.on_volume_change)
-        volume_sizer.Add(self.volume_slider, 1, wx.ALL|wx.EXPAND, 5 )
+        volume_sizer.Add(self.volume_slider, 1, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
         
         main_sizer.Add(volume_sizer, 0, wx.ALL|wx.EXPAND, 5)
+    
+        # Control Buttons
         control_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        buttons = [
+            ("&Load Stations", "load_btn", self.on_load_stations),
+            ("&Play", "play_stop_btn", self.on_play_stop_toggle),
+            (" P&revious", "prev_btn", self.on_previous_favorite),
+            ("&Next", "next_btn", self.on_next_favorite),
+            ("S&tart Recording", "record_btn", self.on_record),
+            ("&Add new station", "import_btn", self.on_import_station)
+        ]
         
-        self.load_btn = wx.Button(panel, label="&Load Stations")
-        self.load_btn.Bind(wx.EVT_BUTTON, self.on_load_stations)
-        control_sizer.Add(self.load_btn, 0, wx.ALL, 5)
-        
-        self.play_stop_btn = wx.Button(panel, label="&Play")
-        self.play_stop_btn.Bind(wx.EVT_BUTTON, self.on_play_stop_toggle)
-        control_sizer.Add(self.play_stop_btn, 0, wx.ALL, 5)
-        # Zapping controls
-        control_sizer.Add(wx.StaticLine(panel, style=wx.LI_VERTICAL), 0, wx.EXPAND|wx.ALL, 5)
-        
-        self.prev_btn = wx.Button(panel, label=" P&revious")
-        self.prev_btn.Bind(wx.EVT_BUTTON, self.on_previous_favorite)
-        control_sizer.Add(self.prev_btn, 0, wx.ALL, 5)
-        self.next_btn = wx.Button(panel, label="&Next")
-        self.next_btn.Bind(wx.EVT_BUTTON, self.on_next_favorite)
-        control_sizer.Add(self.next_btn, 0, wx.ALL, 5)
-        
-        # Recording button
-        control_sizer.Add(wx.StaticLine(panel, style=wx.LI_VERTICAL), 0, wx.EXPAND|wx.ALL, 5)
-        
-        self.record_btn = wx.Button(panel, label="S&tart Recording")
-        self.record_btn.Bind(wx.EVT_BUTTON, self.on_record)
-        control_sizer.Add(self.record_btn, 0, wx.ALL, 5)
-        #import new stations button
-        self.import_btn = wx.Button(panel, label = "&Add new station")
-        self.import_btn.Bind(wx.EVT_BUTTON, self.on_import_station)
-        control_sizer.Add(self.import_btn, 0, wx.ALL, 5)
+        for label, attr, handler in buttons:
+            btn = wx.Button(panel, label=label)
+            setattr(self, attr, btn)
+            btn.Bind(wx.EVT_BUTTON, handler)
+            control_sizer.Add(btn, 0, wx.ALL, 5)
+            # Add a visual separator after 'Play' and 'Next'
+            if label in ["&Play", "&Next"]:
+                control_sizer.Add(wx.StaticLine(panel, style=wx.LI_VERTICAL), 0, wx.EXPAND|wx.ALL, 5)
+    
         main_sizer.Add(control_sizer, 0, wx.ALL|wx.CENTER, 5)
         
-        # Status bar with live region support
+        # Status bar
         self.status_bar = self.CreateStatusBar()
         self.status_bar.SetStatusText("Ready")
         
-        # Live region for screen readers
-        self.live_region = wx.Panel(panel)
-        self.live_region.SetSize((0, 0))
-        self.status_text = wx.StaticText(self.live_region, label="Ready", style=wx.ST_NO_AUTORESIZE)
-         # Set ARIA live region
-        if hasattr(self.status_text, 'SetName'):
-            self.status_text.SetName("status")
-        main_sizer.Add(self.live_region, 0, wx.ALL, 0)
+        # Finalize Layout
+        panel.SetSizer(main_sizer)
+        main_sizer.Fit(self)
+        self.Layout()
         if o:
             self.Bind(wx.EVT_CHAR_HOOK, self.on_handle_key_press)
-        panel.SetSizer(main_sizer)
-    
+
     def set_status(self, message):
         """Set status bar text and announce to screen readers via live region"""
         self.status_bar.SetStatusText(message)
         # Update live region for screen readers
-        self.status_text.SetLabel(message)
+        #self.status_text.SetLabel(message)
         #since the accessible live regions don't seem to work, we'll use the accessible-output2 module for speech, if available
         try:
             o.output(message)
@@ -311,12 +276,12 @@ class RadioPlayerFrame(wx.Frame):
     
     def save_settings(self):
         """Save settings to file"""
-        settings_file = APP_DATA_DIR+"/.radio_settings.json"
+        settings_file = os.path.join(APP_DATA_DIR, ".radio_settings.json")
         try:
             with open(settings_file, 'w') as f:
                 json.dump(self.settings, f, indent=2)
         except Exception as e:
-            print(f"Error saving settings: {e}")
+            wx.MessageBox(f"Error saving settings: {e}", "Error", wx.OK | wx.ICON_ERROR)
     
     def load_countries_and_languages(self):
         """Load countries and languages into dropdowns"""
