@@ -8,9 +8,9 @@ import json
 import os
 from stream_recorder import StreamRecorder
 from radio_api import RadioStation, RadioBrowserAPI
-from settingsDialog import SettingsDialog
-from addStationDialog import AddStationDialog
-import updater
+from SettingsDialog import SettingsDialog
+from AddStationDialog import AddStationDialog
+import Updater as updater
 import accessible_output2.outputs.auto as auto
 from radio_player import RadioPlayer
 o = auto.Auto()
@@ -59,9 +59,7 @@ class RadioPlayerFrame(wx.Frame):
         #initialise the updater
         self.updater = updater.AppUpdater(APP_VERSION, UPDATE_URL, "radio-browser-accessible", self)
         if self.settings.get('check_updates', True):
-            t = threading.Thread(target=self.updater.update)
-            t.daemon = True
-            t.start()
+            wx.CallAfter(self.updater.update)
         # Load initial data
         self.load_countries_and_languages()
         
@@ -111,7 +109,12 @@ class RadioPlayerFrame(wx.Frame):
             setattr(self, attr, choice)
             choice.Bind(wx.EVT_CHOICE, self.on_filter_change)
             filter_sizer.Add(choice, 0, wx.ALL, 5)
-        
+
+        self.best_bitrate_only_cb = wx.CheckBox(panel, label="Best bitrate only")
+        self.best_bitrate_only_cb.SetValue(self.settings.get('best_bitrate_only', True))
+        self.best_bitrate_only_cb.Bind(wx.EVT_CHECKBOX, self.on_filter_change)
+        filter_sizer.Add(self.best_bitrate_only_cb, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
+
         # Buttons
         self.clear_btn = wx.Button(panel, label="Clear Filters")
         self.clear_btn.Enable(False)
@@ -135,9 +138,9 @@ class RadioPlayerFrame(wx.Frame):
             sz.Add(wx.StaticText(p, label=label), 0, wx.ALL, 5)
             lc = wx.ListCtrl(p, style=wx.LC_REPORT|wx.LC_SINGLE_SEL)
             lc.AppendColumn("Station Name", width=250)
-            lc.AppendColumn("Location", width=150)
-            lc.AppendColumn("Country", width=100)
-            lc.AppendColumn("Language", width=100)
+            lc.AppendColumn("Location", width=220)
+            lc.AppendColumn("Language", width=120)
+            lc.AppendColumn("Bitrate", width=90)
             sz.Add(lc, 1, wx.EXPAND|wx.ALL, 5)
             p.SetSizer(sz)
             return p, lc
@@ -230,6 +233,7 @@ class RadioPlayerFrame(wx.Frame):
         dlg = SettingsDialog(self, self.settings)
         if dlg.ShowModal() == wx.ID_OK:
             self.settings = dlg.settings
+            self.settings['best_bitrate_only'] = self.best_bitrate_only_cb.GetValue()
             self.save_settings()
             # Apply buffer size
             self.set_status("Settings saved")
@@ -247,7 +251,7 @@ class RadioPlayerFrame(wx.Frame):
     def on_exit(self, event):
         """Exit application"""
         if self.is_playing:
-            self.player.stop()
+            self.radio.stop()
         if self.recording:
             self.stop_recording()
         self.Close()
@@ -261,7 +265,8 @@ class RadioPlayerFrame(wx.Frame):
             'autoplay': False,
             'buffer_size': 1000,
             'check_updates': True,
-            'volume': 70
+            'volume': 70,
+            'best_bitrate_only': True
         }
         
         if os.path.exists(settings_file):
@@ -331,7 +336,7 @@ class RadioPlayerFrame(wx.Frame):
         self.current_offset = 0
         
         def load():
-            self.stations = self.api.get_stations()
+            self.stations = self.api.get_stations(best_bitrate_only=self.best_bitrate_only_cb.GetValue())
             wx.CallAfter(self.on_stations_loaded)
         
         thread = threading.Thread(target=load)
@@ -362,7 +367,9 @@ class RadioPlayerFrame(wx.Frame):
                 country=search_country,
                 language=search_language,
                 offset=self.current_offset,
-                limit=self.stations_per_page
+                limit=self.stations_per_page,
+                order='bitrate' if self.best_bitrate_only_cb.GetValue() else 'votes',
+                best_bitrate_only=self.best_bitrate_only_cb.GetValue(),
             )
             
             wx.CallAfter(self.on_more_stations_loaded, more_stations)
@@ -417,7 +424,9 @@ class RadioPlayerFrame(wx.Frame):
                     country=search_country,
                     language=search_language,
                     offset=0,
-                    limit=self.stations_per_page
+                    limit=self.stations_per_page,
+                    order='bitrate' if self.best_bitrate_only_cb.GetValue() else 'votes',
+                    best_bitrate_only=self.best_bitrate_only_cb.GetValue(),
                 )
                 
                 # Apply continent filter locally
@@ -432,7 +441,12 @@ class RadioPlayerFrame(wx.Frame):
             thread.start()
         else:
             self.filtered_stations = self.stations[:]
-            self.update_stations_list()    
+            if continent != "All" and continent in self.continent_map:
+                continent_codes = self.continent_map[continent]
+                self.filtered_stations = [s for s in self.filtered_stations if s.countrycode in continent_codes]
+            if self.best_bitrate_only_cb.GetValue():
+                self.filtered_stations = self.api._remove_duplicates_keep_highest_bitrate(self.filtered_stations)
+            self.update_stations_list()
     
     def on_filter_results_loaded(self, results):
         """Called when filter search results are loaded"""
@@ -451,7 +465,7 @@ class RadioPlayerFrame(wx.Frame):
         self.stations_list.DeleteAllItems()
         for i, station in enumerate(self.filtered_stations):
             index = self.stations_list.InsertItem(i, station.name)
-            self.stations_list.SetItem(index, 1, station.country)
+            self.stations_list.SetItem(index, 1, station.location)
             self.stations_list.SetItem(index, 2, station.language)
             self.stations_list.SetItem(index, 3, f"{station.bitrate} kbps")
         
@@ -465,12 +479,13 @@ class RadioPlayerFrame(wx.Frame):
         self.favorites_list.DeleteAllItems()
         for i, station in enumerate(self.favorites):
             index = self.favorites_list.InsertItem(i, station.name)
-            self.favorites_list.SetItem(index, 1, station.country)
+            self.favorites_list.SetItem(index, 1, station.location)
             self.favorites_list.SetItem(index, 2, station.language)
             self.favorites_list.SetItem(index, 3, f"{station.bitrate} kbps")
     
     def on_filter_change(self, event):
         """Handle filter change"""
+        self.settings['best_bitrate_only'] = self.best_bitrate_only_cb.GetValue()
         if self.stations:
             self.apply_filters()
             self.clear_btn.Enable(True)
@@ -481,6 +496,7 @@ class RadioPlayerFrame(wx.Frame):
         self.country_choice.SetSelection(0)
         self.language_choice.SetSelection(0)
         self.continent_choice.SetSelection(0)
+        self.best_bitrate_only_cb.SetValue(self.settings.get('best_bitrate_only', True))
         self.current_offset = 0
         self.has_more_stations = False
         self.load_more_btn.Enable(False)
@@ -600,7 +616,7 @@ class RadioPlayerFrame(wx.Frame):
     def play_station(self, station):
             self.current_station = station
             self.now_playing_label.SetLabel(f"Playing: {station.name} ({station.location})")
-            self.stream_url_label.SetLabel(f"Stream URL: {station.url}")
+            self.stream_url_box.SetValue(station.url)
             if self.is_playing:
                 self.stop_playback()
                 
@@ -616,7 +632,7 @@ class RadioPlayerFrame(wx.Frame):
             self.is_playing = False
             self.play_stop_btn.SetLabel("&Play")
             self.now_playing_label.SetLabel("No station playing")
-            self.stream_url_label.SetLabel("Stream URL: ")
+            self.stream_url_box.SetValue("")
             self.set_status("Stopped")
         
         if self.recording:
@@ -754,7 +770,9 @@ class RadioPlayerFrame(wx.Frame):
                     'tags': fav.tags,
                     'favicon': fav.favicon,
                     'geo_lat': fav.geo_lat,
-                    'geo_long': fav.geo_long
+                    'geo_long': fav.geo_long,
+                    'city': getattr(fav, 'city', ''),
+                    'location': fav.location
                 })
             
             with open(favorites_file, 'w') as f:
