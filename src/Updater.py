@@ -557,34 +557,40 @@ class AppUpdater:
     
     def _compare_versions(self, v1: str, v2: str) -> int:
         """
-        Compare two version strings.
-        
+        Compare two semantic version strings.
+
         Returns:
             1 if v1 > v2
             0 if v1 == v2
             -1 if v1 < v2
         """
-        def normalize(v):
-            parts = [int(x) for x in v.split('.') if x.isdigit()]
+        def normalize(version: str):
+            import re
+
+            cleaned = version.strip().lstrip("vV")
+            cleaned = cleaned.split("-")[0].split("+")[0]
+            parts = []
+            for token in cleaned.split("."):
+                match = re.match(r"(\d+)", token)
+                parts.append(int(match.group(1)) if match else 0)
             return parts
-        
+
         v1_parts = normalize(v1)
         v2_parts = normalize(v2)
-        
-        # Pad with zeros
-        max_len = max(len(v1_parts), len(v2_parts))
+
+        max_len = max(len(v1_parts), len(v2_parts), 3)
         v1_parts += [0] * (max_len - len(v1_parts))
         v2_parts += [0] * (max_len - len(v2_parts))
-        
+
         for a, b in zip(v1_parts, v2_parts):
             if a > b:
                 return 1
-            elif a < b:
+            if a < b:
                 return -1
-        
+
         return 0
-    
-    def             update(self, manual: bool = False):
+
+    def update(self, manual: bool = False):
         """Check for updates and perform update if available."""
         update_info = self.check_for_updates(show_no_update_dialog=manual)
         if update_info:
