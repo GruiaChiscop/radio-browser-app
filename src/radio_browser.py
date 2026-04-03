@@ -210,7 +210,7 @@ class RadioPlayerFrame(wx.Frame):
         self.status_bar = self.CreateStatusBar()
         self.status_bar.SetStatusText("Ready")
         
-        # Finalize Layout
+        # Finalise Layout
         panel.SetSizer(main_sizer)
         main_sizer.Fit(self)
         self.Layout()
@@ -528,7 +528,7 @@ class RadioPlayerFrame(wx.Frame):
         
         menu = wx.Menu()
         play_item = menu.Append(wx.ID_ANY, "Play")
-        add_fav_item = menu.Append(wx.ID_ANY, "Add to Favorites")
+        add_fav_item = menu.Append(wx.ID_ANY, "Add to Favourites")
         copy_url_item = menu.Append(wx.ID_ANY, "Copy Stream URL")
         
         def on_play(e):
@@ -643,7 +643,7 @@ class RadioPlayerFrame(wx.Frame):
         if not self.is_muted:
             self.volume = self.volume_slider.GetValue()/100.0
             self.radio.set_volume(self.volume)
-            self.set_status(f"Volume: {self.volume}%")
+            #self.set_status(f"Volume: {self.volume}%")
 
 
     def on_mute_toggle(self, event):
@@ -726,7 +726,7 @@ class RadioPlayerFrame(wx.Frame):
         """Add station to favorites"""
         for fav in self.favorites:
             if fav.url == station.url:
-                wx.MessageBox("Station already in favorites!", "Info", wx.OK | wx.ICON_INFORMATION)
+                wx.MessageBox("Station already in favourites!", "Info", wx.OK | wx.ICON_INFORMATION)
                 return
         
         self.favorites.append(station)
@@ -740,7 +740,7 @@ class RadioPlayerFrame(wx.Frame):
             station = self.favorites.pop(index)
             self.update_favorites_list()
             self.save_favorites()
-            self.set_status(f"Removed {station.name} from favorites")
+            self.set_status(f"Removed {station.name} from favourites")
     def on_import_station(self, event):
         dlg = AddStationDialog(self)
         if dlg.ShowModal() == wx.ID_OK:
