@@ -25,3 +25,5 @@ src/bypass/*.dll
 *.user
 Thumbs.db
 .DS_Store
+# files left behind by agents
+.claude/
