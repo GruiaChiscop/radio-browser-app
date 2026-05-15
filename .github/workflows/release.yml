@@ -108,6 +108,7 @@ jobs:
         run: |
           python -m nuitka \
             --onefile \
+            --macos-target-arch=universal \
             --enable-plugin=wx \
             --include-package=accessible_output2 \
             --include-package=sound_lib \
