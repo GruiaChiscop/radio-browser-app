@@ -1,6 +1,5 @@
 import wx
 import requests
-import json
 import os
 import sys
 import shutil
@@ -8,7 +7,6 @@ import tempfile
 import subprocess
 import platform
 import hashlib
-from pathlib import Path
 from typing import Optional, Callable
 from threading import Thread
 import time
