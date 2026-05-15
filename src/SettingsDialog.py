@@ -1,9 +1,8 @@
 import wx
-import wx.adv
 
 class SettingsDialog(wx.Dialog):
     def __init__(self, parent, settings):
-        super().__init__(parent, title="Settings", size=(500, 400))
+        super().__init__(parent, title="Settings", size=(520, 430))
         
         self.settings = settings.copy()
         
@@ -30,8 +29,8 @@ class SettingsDialog(wx.Dialog):
         source_box = wx.StaticBox(panel, label="Data Source")
         source_sizer = wx.StaticBoxSizer(source_box, wx.VERTICAL)
         
-        self.rb_radiobrowser = wx.RadioButton(panel, label="Radio Browser", style=wx.RB_GROUP)
-        self.rb_onlineradiobox = wx.RadioButton(panel, label="Online Radio Box (experimental)")
+        self.rb_radiobrowser = wx.RadioButton(panel, label="Radio Browser (radio-browser.info)", style=wx.RB_GROUP)
+        self.rb_onlineradiobox = wx.RadioButton(panel, label="Online Radio Box (onlineradiobox.com)")
         
         if self.settings.get('source', 'radiobrowser') == 'radiobrowser':
             self.rb_radiobrowser.SetValue(True)
@@ -95,11 +94,11 @@ class SettingsDialog(wx.Dialog):
         dlg.Destroy()
     
     def on_check_updates(self, event):
-        #self.GetParent().updater.check_for_updates(True)
-        old_parent_window = self.GetParent().updater.parent_window
-        self.GetParent().updater.parent_window = self
-        self.GetParent().updater.update(True)
-        self.GetParent().updater.parent_window = old_parent_window
+        upd = self.GetParent().app_updater
+        old_window = upd.parent_window
+        upd.parent_window = self
+        upd.update(manual=True)
+        upd.parent_window = old_window
     
     def on_ok(self, event):
         self.settings['recording_dir'] = self.rec_dir_text.GetValue()

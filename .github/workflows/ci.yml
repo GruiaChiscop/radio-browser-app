@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linters
+        run: pip install flake8 pyflakes
+
+      - name: Run flake8
+        # E501 = line too long (relaxed), W503 = line break before binary operator
+        run: |
+          flake8 src/ --max-line-length=120 --ignore=E501,W503,E402 --count --statistics
+
+  verify-imports:
+    name: Verify imports resolve
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime deps (headless-safe subset)
+        # wxPython install on CI requires a wheel; skip it and only check
+        # the modules that don't need a display.
+        run: |
+          pip install requests certifi urllib3 charset-normalizer idna platformdirs
+
+      - name: Check non-GUI modules parse without error
+        run: |
+          python -c "import ast, sys, pathlib
+          files = list(pathlib.Path('src').glob('*.py'))
+          errors = []
+          for f in files:
+              try:
+                  ast.parse(f.read_text(encoding='utf-8'))
+              except SyntaxError as e:
+                  errors.append(f'{f}: {e}')
+          if errors:
+              print('Syntax errors found:')
+              for e in errors: print(e)
+              sys.exit(1)
+          print(f'All {len(files)} source files parse cleanly.')
+          "

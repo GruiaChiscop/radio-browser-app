@@ -1,8 +1,17 @@
+import json
+import os
 import random
 import socket
+import time
 from typing import Dict, List, Optional
 
 import requests
+
+_CACHE_PATH = os.path.join(
+    os.environ.get("APPDATA", os.path.expanduser("~")),
+    ".radio_server_cache.json",
+)
+_CACHE_TTL = 86400  # 24 hours
 
 
 class RadioStation:
@@ -33,21 +42,21 @@ class RadioStation:
             self.name = data.get("name", "Unknown")
             self.url = data.get("url", "")
             self.country = data.get("country", "Unknown")
-            self.countrycode = ""
+            self.countrycode = data.get("countrycode", "")
             self.state = ""
             self.language = data.get("language", "Unknown")
             self.tags = ""
-            self.favicon = ""
+            self.favicon = data.get("favicon", "")
             self.bitrate = 0
             self.codec = "Unknown"
             self.geo_lat = None
             self.geo_long = None
             self.city = ""
             self.votes = 0
-            self.location = self.country
+            self.location = data.get("location", self.country)
         else:
-            self.name = ""
-            self.url = ""
+            self.name = data.get("name", "")
+            self.url = data.get("url", "")
             self.country = "Unknown"
             self.countrycode = ""
             self.state = ""
@@ -74,6 +83,28 @@ class RadioBrowserAPI:
         self.base_url: Optional[str] = None
         self.on_servers_set = lambda message: None
         self.on_error = lambda message: None
+        self._load_cached_server()
+
+    # ------------------------------------------------------------------
+    # Server discovery with 24-hour cache so DNS lookup doesn't block UI
+    # ------------------------------------------------------------------
+
+    def _load_cached_server(self):
+        try:
+            if os.path.exists(_CACHE_PATH):
+                with open(_CACHE_PATH, "r") as f:
+                    data = json.load(f)
+                if time.time() - data.get("timestamp", 0) < _CACHE_TTL:
+                    self.base_url = data.get("url")
+        except Exception:
+            pass
+
+    def _save_cached_server(self, url: str):
+        try:
+            with open(_CACHE_PATH, "w") as f:
+                json.dump({"url": url, "timestamp": time.time()}, f)
+        except Exception:
+            pass
 
     def _get_radiobrowser_base_urls(self) -> List[str]:
         hosts = []
@@ -100,17 +131,31 @@ class RadioBrowserAPI:
         servers = self._get_radiobrowser_base_urls()
         if servers:
             self.base_url = random.choice(servers)
+            self._save_cached_server(self.base_url)
             self.on_servers_set(f"Using server: {self.base_url}")
         else:
             self.base_url = "https://de1.api.radio-browser.info"
             self.on_error("Could not discover servers. Using fallback server.")
         return self.base_url
 
+    def refresh_server(self):
+        """Force a fresh server discovery, ignoring the cache."""
+        self.base_url = None
+        try:
+            os.remove(_CACHE_PATH)
+        except Exception:
+            pass
+        return self._get_base_url()
+
+    # ------------------------------------------------------------------
+    # HTTP helpers
+    # ------------------------------------------------------------------
+
     def _make_request(self, path, params=None, data=None):
         base_url = self._get_base_url()
         url = f"{base_url}{path}"
         headers = {
-            "User-Agent": "RadioBrowserPlayer/1.1",
+            "User-Agent": "RadioBrowserPlayer/1.2",
             "Content-Type": "application/json",
         }
 
@@ -125,6 +170,10 @@ class RadioBrowserAPI:
             self.on_error(f"Request error for {url}: {e}")
             return None
 
+    # ------------------------------------------------------------------
+    # De-duplication
+    # ------------------------------------------------------------------
+
     def _remove_duplicates_keep_highest_bitrate(self, stations: List[RadioStation]) -> List[RadioStation]:
         best: Dict[str, RadioStation] = {}
         for station in stations:
@@ -132,6 +181,10 @@ class RadioBrowserAPI:
             if key not in best or station.bitrate > best[key].bitrate:
                 best[key] = station
         return sorted(best.values(), key=lambda s: (s.bitrate, s.votes), reverse=True)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     def get_stations(self, limit=1000, best_bitrate_only=False):
         data = self._make_request(f"/json/stations/topvote/{limit}")
@@ -186,11 +239,11 @@ class RadioBrowserAPI:
     def get_languages(self):
         data = self._make_request("/json/languages")
         if data:
-            return sorted([language_name["name"] for language_name in data if language_name.get("name")])
+            return sorted([lang["name"] for lang in data if lang.get("name")])
         return []
 
     def get_continents(self):
-        continents = {
+        return {
             "Africa": ["DZ", "AO", "BJ", "BW", "BF", "BI", "CM", "CV", "CF", "TD", "KM", "CG", "CD", "CI", "DJ", "EG", "GQ", "ER", "ET", "GA", "GM", "GH", "GN", "GW", "KE", "LS", "LR", "LY", "MG", "MW", "ML", "MR", "MU", "YT", "MA", "MZ", "NA", "NE", "NG", "RE", "RW", "SH", "ST", "SN", "SC", "SL", "SO", "ZA", "SS", "SD", "SZ", "TZ", "TG", "TN", "UG", "EH", "ZM", "ZW"],
             "Asia": ["AF", "AM", "AZ", "BH", "BD", "BT", "BN", "KH", "CN", "GE", "HK", "IN", "ID", "IR", "IQ", "IL", "JP", "JO", "KZ", "KW", "KG", "LA", "LB", "MO", "MY", "MV", "MN", "MM", "NP", "KP", "OM", "PK", "PS", "PH", "QA", "SA", "SG", "KR", "LK", "SY", "TW", "TJ", "TH", "TL", "TR", "TM", "AE", "UZ", "VN", "YE"],
             "Europe": ["AX", "AL", "AD", "AT", "BY", "BE", "BA", "BG", "HR", "CY", "CZ", "DK", "EE", "FO", "FI", "FR", "DE", "GI", "GR", "GG", "HU", "IS", "IE", "IM", "IT", "JE", "XK", "LV", "LI", "LT", "LU", "MK", "MT", "MD", "MC", "ME", "NL", "NO", "PL", "PT", "RO", "RU", "SM", "RS", "SK", "SI", "ES", "SJ", "SE", "CH", "UA", "GB", "VA"],
@@ -199,7 +252,6 @@ class RadioBrowserAPI:
             "Oceania": ["AS", "AU", "CK", "FJ", "PF", "GU", "KI", "MH", "FM", "NR", "NC", "NZ", "NU", "NF", "MP", "PW", "PG", "PN", "WS", "SB", "TK", "TO", "TV", "VU", "WF"],
             "Antarctica": ["AQ", "BV", "TF", "HM", "GS"],
         }
-        return continents
 
     def get_continents_list(self):
         return list(self.get_continents().keys())

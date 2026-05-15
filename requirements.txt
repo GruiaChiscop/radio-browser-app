@@ -1,0 +1,16 @@
+# Runtime dependencies
+accessible-output2==0.17
+certifi>=2024.0.0
+charset-normalizer>=3.0.0
+idna>=3.0
+libloader==1.4.2
+platform_utils==1.6.0
+platformdirs>=4.0.0
+pywin32>=311; sys_platform == "win32"
+requests>=2.32.0
+urllib3>=2.0.0
+wxPython==4.2.4
+
+# Build-only (Nuitka toolchain) — not needed at runtime
+# Install these separately before running build.ps1 or the release workflow:
+#   pip install nuitka zstandard ordered-set
