@@ -1,7 +1,6 @@
 import requests
 import urllib.parse
 from typing import Dict, Tuple, Optional
-import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 class StreamChecker:
