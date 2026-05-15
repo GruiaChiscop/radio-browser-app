@@ -2,10 +2,40 @@ import re
 import threading
 import time
 from enum import Enum, auto
+from typing import Optional
 
+import requests
 from sound_lib.output import Output
 from sound_lib.stream import URLStream
 from sound_lib.main import BassError
+
+
+def _resolve_playlist(url: str) -> Optional[str]:
+    """Fetch a PLS or M3U playlist URL and return the first stream URL inside it."""
+    try:
+        r = requests.get(
+            url, timeout=8,
+            headers={"User-Agent": "RadioBrowserPlayer/1.0"},
+            allow_redirects=True,
+        )
+        r.raise_for_status()
+        text = r.text.strip()
+
+        # PLS: [playlist] section with File1=url, File2=url, …
+        if "[playlist]" in text.lower():
+            for line in text.splitlines():
+                m = re.match(r"^File\d+=(.+)$", line.strip(), re.IGNORECASE)
+                if m:
+                    return m.group(1).strip()
+
+        # M3U / M3U8: first non-comment, non-empty line that looks like a URL
+        for line in text.splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and line.startswith("http"):
+                return line
+    except Exception:
+        pass
+    return None
 
 
 class PlayerState(Enum):
@@ -23,22 +53,36 @@ class RadioPlayer:
         self.volume = 1.0
         self.current_url = None
         self.metadata_callback = None
+        self.on_error = lambda msg: None
         self.stream = None
 
         self._stop_metadata = threading.Event()
         self._metadata_thread = None
 
-    def _play_internal(self, url):
+    def _play_internal(self, url: str):
         try:
             self.state = PlayerState.CONNECTING
-            self.stream = URLStream(url)
+            try:
+                self.stream = URLStream(url)
+            except BassError as e:
+                # Error 41 = BASS_ERROR_FILEFORM: server returned a playlist
+                # (M3U/PLS) instead of a raw stream. Try to resolve it.
+                if getattr(e, "code", None) == 41 or str(e).startswith("41,"):
+                    resolved = _resolve_playlist(url)
+                    if resolved and resolved != url:
+                        self.current_url = resolved
+                        self.stream = URLStream(resolved)
+                    else:
+                        raise
+                else:
+                    raise
             self.stream.set_volume(self.volume)
             self.stream.play()
             time.sleep(0.2)
             self.state = PlayerState.PLAYING
             self._start_metadata_thread()
         except Exception as e:
-            print(f"Error playing stream: {e}")
+            self.on_error(f"Could not play stream: {e}")
             self.state = PlayerState.IDLE
             self.stream = None
 

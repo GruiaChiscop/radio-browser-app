@@ -59,6 +59,7 @@ class RadioPlayerFrame(wx.Frame):
 
         self.radio = RadioPlayer()
         self.radio.set_metadata_callback(self._on_metadata)
+        self.radio.on_error = lambda msg: wx.CallAfter(self.set_status, msg)
         self.radio.set_volume(self.volume)
 
         self.rb_api.on_servers_set = lambda msg: self.set_status(msg)

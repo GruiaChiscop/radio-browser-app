@@ -92,9 +92,7 @@ jobs:
         shell: pwsh
         run: |
           python -m nuitka `
-            --onefile `
             --windows-disable-console `
-            --enable-plugin=wx `
             --include-package=accessible_output2 `
             --include-package=sound_lib `
             --include-package=libloader `
@@ -110,9 +108,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           python -m nuitka \
-            --onefile \
             --macos-target-arch=universal \
-            --enable-plugin=wx \
             --include-package=accessible_output2 \
             --include-package=sound_lib \
             --include-package=libloader \
@@ -128,8 +124,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           python -m nuitka \
-            --onefile \
-            --enable-plugin=wx \
+            \
             --include-package=accessible_output2 \
             --include-package=sound_lib \
             --include-package=libloader \

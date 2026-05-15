@@ -178,6 +178,17 @@ class AppUpdater:
             # Legacy custom JSON format
             return self._parse_legacy_format(data, show_no_update_dialog)
 
+        except requests.HTTPError as e:
+            # 404 = no releases published yet; treat silently as "no update"
+            if e.response is not None and e.response.status_code == 404:
+                return None
+            if show_no_update_dialog and self.parent_window:
+                wx.MessageBox(
+                    f"Failed to check for updates:\n{e}",
+                    "Update Check Failed",
+                    wx.OK | wx.ICON_ERROR,
+                    self.parent_window,
+                )
         except requests.RequestException as e:
             if show_no_update_dialog and self.parent_window:
                 wx.MessageBox(
@@ -490,9 +501,16 @@ class AppUpdater:
     # ------------------------------------------------------------------
 
     def update(self, manual: bool = False):
-        info = self.check_for_updates(show_no_update_dialog=manual)
-        if not info:
-            return
+        # Network check runs in a background thread; UI prompt is posted back
+        # to the main thread via wx.CallAfter so the UI never freezes.
+        def _check():
+            info = self.check_for_updates(show_no_update_dialog=manual)
+            if info:
+                wx.CallAfter(self._show_update_prompt, info)
+
+        Thread(target=_check, daemon=True).start()
+
+    def _show_update_prompt(self, info: UpdateInfo):
         choice = self.prompt_update(info)
         if choice == wx.ID_OK:
             self.download_and_install(info)

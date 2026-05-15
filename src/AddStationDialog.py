@@ -1,7 +1,7 @@
 import wx
 
 from radio_api import RadioStation
-from StreamChecker import StreamChecker
+from streamChecker import StreamChecker
 
 
 class AddStationDialog(wx.Dialog):
