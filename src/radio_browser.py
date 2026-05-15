@@ -3,40 +3,31 @@ import wx.adv
 from datetime import datetime
 import threading
 from pathlib import Path
-import platform
 import json
 import os
 
+from platformdirs import user_data_dir
+
 from stream_recorder import StreamRecorder
 from radio_api import RadioStation, RadioBrowserAPI
-<<<<<<< HEAD
-from settingsDialog import SettingsDialog
-=======
 from online_radio_box import OnlineRadioBoxAPI
 from SettingsDialog import SettingsDialog
->>>>>>> claude/happy-volhard-12d9c0
 from AddStationDialog import AddStationDialog
 import Updater as updater
 import accessible_output2.outputs.auto as auto
 from radio_player import RadioPlayer
-<<<<<<< HEAD
-import app
-o = auto.Auto()
-APP_VERSION = "1.1.0"
-UPDATE_URL = "https://gruiachiscop.dev/radio-browser-accessible/update/version.json"
-APP_DATA_DIR = os.environ.get('APPDATA') if platform.system() == 'Windows' else str(Path.home())
-=======
 
 _ao = auto.Auto()
 if _ao.is_system_output():
     _ao = None
 
 APP_VERSION = "1.2.0"
-# GitHub Releases API — check_for_updates() in Updater.py parses this format
 UPDATE_URL = "https://api.github.com/repos/GruiaChiscop/radio-browser-accessible-desktop-app/releases/latest"
-APP_DATA_DIR = os.environ.get("APPDATA") if platform.system() == "Windows" else str(Path.home())
 
->>>>>>> claude/happy-volhard-12d9c0
+# Cross-platform app data directory (Windows: %LOCALAPPDATA%, macOS: ~/Library/Application Support, Linux: ~/.local/share)
+APP_DATA_DIR = user_data_dir("RadioBrowserPlayer", "GruiaChiscop")
+os.makedirs(APP_DATA_DIR, exist_ok=True)
+
 
 class RadioPlayerFrame(wx.Frame):
     def __init__(self):
@@ -205,15 +196,9 @@ class RadioPlayerFrame(wx.Frame):
         self.mute_btn = wx.Button(panel, label="&Mute")
         self.mute_btn.Bind(wx.EVT_BUTTON, self.on_mute_toggle)
         volume_sizer.Add(self.mute_btn, 0, wx.ALL, 5)
-<<<<<<< HEAD
-        
-        volume_sizer.Add(wx.StaticText(panel, label="&Volume:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
-        self.volume_slider = wx.Slider(panel, value=70, minValue=0, maxValue=100, style=wx.SL_INVERSE)
-=======
 
         volume_sizer.Add(wx.StaticText(panel, label="&Volume:"), 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
         self.volume_slider = wx.Slider(panel, value=self.settings.get("volume", 70), minValue=0, maxValue=100)
->>>>>>> claude/happy-volhard-12d9c0
         self.volume_slider.Bind(wx.EVT_SLIDER, self.on_volume_change)
         volume_sizer.Add(self.volume_slider, 1, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
 
@@ -267,7 +252,7 @@ class RadioPlayerFrame(wx.Frame):
     # ------------------------------------------------------------------
 
     def _load_settings(self) -> dict:
-        settings_file = os.path.join(APP_DATA_DIR, ".radio_settings.json")
+        settings_file = os.path.join(APP_DATA_DIR, "settings.json")
         defaults = {
             "recording_dir": str(Path.home() / "RadioRecordings"),
             "source": "radiobrowser",
@@ -277,18 +262,29 @@ class RadioPlayerFrame(wx.Frame):
             "volume": 70,
             "best_bitrate_only": True,
         }
+        # One-time migration from the old Windows-only location (%APPDATA%\.radio_settings.json)
+        if not os.path.exists(settings_file):
+            old_appdata = os.environ.get("APPDATA", "")
+            if old_appdata:
+                old_file = os.path.join(old_appdata, ".radio_settings.json")
+                if os.path.exists(old_file):
+                    try:
+                        import shutil
+                        shutil.copy2(old_file, settings_file)
+                    except Exception:
+                        pass
         if os.path.exists(settings_file):
             try:
-                with open(settings_file, "r") as f:
+                with open(settings_file, "r", encoding="utf-8") as f:
                     defaults.update(json.load(f))
             except Exception as e:
                 print(f"Error loading settings: {e}")
         return defaults
 
     def _save_settings(self):
-        settings_file = os.path.join(APP_DATA_DIR, ".radio_settings.json")
+        settings_file = os.path.join(APP_DATA_DIR, "settings.json")
         try:
-            with open(settings_file, "w") as f:
+            with open(settings_file, "w", encoding="utf-8") as f:
                 json.dump(self.settings, f, indent=2)
         except Exception as e:
             wx.MessageBox(f"Error saving settings: {e}", "Error", wx.OK | wx.ICON_ERROR)
@@ -298,7 +294,19 @@ class RadioPlayerFrame(wx.Frame):
     # ------------------------------------------------------------------
 
     def _load_favorites(self):
-        favorites_file = os.path.join(APP_DATA_DIR, ".radio_favorites.json")
+        favorites_file = os.path.join(APP_DATA_DIR, "favorites.json")
+        # One-time migration from the old Windows-only location
+        if not os.path.exists(favorites_file):
+            old_appdata = os.environ.get("APPDATA", "")
+            if old_appdata:
+                old_file = os.path.join(old_appdata, ".radio_favorites.json")
+                if os.path.exists(old_file):
+                    try:
+                        import shutil
+                        shutil.copy2(old_file, favorites_file)
+                    except Exception:
+                        pass
+        favorites_file = os.path.join(APP_DATA_DIR, "favorites.json")
         if os.path.exists(favorites_file):
             try:
                 with open(favorites_file, "r") as f:
@@ -309,7 +317,7 @@ class RadioPlayerFrame(wx.Frame):
                 print(f"Error loading favorites: {e}")
 
     def _save_favorites(self):
-        favorites_file = os.path.join(APP_DATA_DIR, ".radio_favorites.json")
+        favorites_file = os.path.join(APP_DATA_DIR, "favorites.json")
         try:
             data = []
             for fav in self.favorites:
@@ -329,7 +337,7 @@ class RadioPlayerFrame(wx.Frame):
                     "city": getattr(fav, "city", ""),
                     "location": fav.location,
                 })
-            with open(favorites_file, "w") as f:
+            with open(favorites_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
             print(f"Error saving favorites: {e}")
@@ -864,13 +872,8 @@ class RadioPlayerFrame(wx.Frame):
         else:
             event.Skip()
 
-<<<<<<< HEAD
-if __name__ == '__main__':
-    app = app.RadioBrowserApp()
-=======
 
 if __name__ == "__main__":
     app = wx.App()
     frame = RadioPlayerFrame()
->>>>>>> claude/happy-volhard-12d9c0
     app.MainLoop()

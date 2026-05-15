@@ -1,14 +1,9 @@
 import wx
-<<<<<<< HEAD
-from radio_api import RadioBrowserAPI, RadioStation
-from streamChecker import StreamChecker
-=======
 
 from radio_api import RadioStation
 from StreamChecker import StreamChecker
 
 
->>>>>>> claude/happy-volhard-12d9c0
 class AddStationDialog(wx.Dialog):
     def __init__(self, parent):
         super().__init__(parent, title="Add a custom station")

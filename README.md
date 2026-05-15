@@ -32,5 +32,6 @@ to run the program.
 pyinstaller -w radio-browser.py
 ```
 You should use the -w flag to compile the exe as a windows subsystem program, if you're running on windows, of course.
+Also, to run the program, you'll need to grab the [Bass Audio](https://www.un4seen.com/) files, then place them inside the internal/pybass directory. Otherwise the app will throw an exception.
 ### Contributing to this project
 If you find bugs or simply want to improve this project, do not hesitate to open issues or create a pull request. Any suggestion is wellcome.
