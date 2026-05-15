@@ -26,7 +26,7 @@ jobs:
           - runner: macos-latest
             os-name: macOS
             binary-name: radio_browser_mac
-            nuitka-extra: --macos-target-arch=x86_64
+            nuitka-extra: ""
             pip-cache: ~/Library/Caches/pip
 
           - runner: ubuntu-22.04
@@ -38,10 +38,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Cache pip
         uses: actions/cache@v4
@@ -108,7 +108,6 @@ jobs:
         run: |
           python -m nuitka \
             --onefile \
-            --macos-target-arch=x86_64 \
             --enable-plugin=wx \
             --include-package=accessible_output2 \
             --include-package=sound_lib \
