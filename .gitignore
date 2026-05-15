@@ -1,12 +1,27 @@
-# Created by venv; see https://docs.python.org/3/library/venv.html
-*
-include/
-lib/
+# Python virtual environment (created by python -m venv at repo root)
+Scripts/
+Include/
+Lib/
 pyvenv.cfg
-dist/
+
+# Build artifacts
 build/
-src/bypass/*.dll
+dist/
+*.spec
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# DLLs in bypass directory
+src/bypass/*.dll
+
+# IDE / OS
+.vscode/settings.json
+.idea/
+*.suo
+*.user
+Thumbs.db
+.DS_Store
