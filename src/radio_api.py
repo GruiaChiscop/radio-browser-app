@@ -6,11 +6,11 @@ import time
 from typing import Dict, List, Optional
 
 import requests
+from platformdirs import user_cache_dir
 
-_CACHE_PATH = os.path.join(
-    os.environ.get("APPDATA", os.path.expanduser("~")),
-    ".radio_server_cache.json",
-)
+_CACHE_DIR = user_cache_dir("RadioBrowserPlayer", "GruiaChiscop")
+os.makedirs(_CACHE_DIR, exist_ok=True)
+_CACHE_PATH = os.path.join(_CACHE_DIR, "server_cache.json")
 _CACHE_TTL = 86400  # 24 hours
 
 
