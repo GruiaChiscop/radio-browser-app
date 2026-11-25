@@ -83,7 +83,11 @@ class RadioPlayerFrame(wx.Frame):
     # ------------------------------------------------------------------
 
     def _on_metadata(self, title: str):
-        wx.CallAfter(self.set_status, f"Now Playing: {title}")
+        wx.CallAfter(self._apply_metadata, title)
+
+    def _apply_metadata(self, title: str):
+        self.now_playing_label.SetLabel(f"Now playing: {title}")
+        self.set_status(f"Now playing: {title}")
 
     # ------------------------------------------------------------------
     # UI setup
@@ -616,8 +620,7 @@ class RadioPlayerFrame(wx.Frame):
 
         if self.is_playing:
             self.radio.stop()
-            if self._active_source == "onlineradiobox":
-                self.orb_api.stop_now_playing_poll()
+            self.orb_api.stop_now_playing_poll()
 
         self.radio.play(station.url)
         self.is_playing = True
@@ -636,8 +639,7 @@ class RadioPlayerFrame(wx.Frame):
             self.now_playing_label.SetLabel("No station playing")
             self.stream_url_box.SetValue("")
             self.set_status("Stopped")
-            if self._active_source == "onlineradiobox":
-                self.orb_api.stop_now_playing_poll()
+            self.orb_api.stop_now_playing_poll()
         if self.recording:
             self._stop_recording()
 
