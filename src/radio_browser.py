@@ -307,7 +307,6 @@ class RadioPlayerFrame(wx.Frame):
                         shutil.copy2(old_file, favorites_file)
                     except Exception:
                         pass
-        favorites_file = os.path.join(APP_DATA_DIR, "favorites.json")
         if os.path.exists(favorites_file):
             try:
                 with open(favorites_file, "r") as f:
@@ -422,7 +421,7 @@ class RadioPlayerFrame(wx.Frame):
         threading.Thread(target=load, daemon=True).start()
 
     def on_load_more_stations(self, event):
-        if not self.has_more_stations:
+        if not self.has_more_stations or self._active_source != "radiobrowser":
             return
         self.set_status("Loading more stations…")
         self.load_more_btn.Enable(False)
@@ -451,7 +450,6 @@ class RadioPlayerFrame(wx.Frame):
         self.stations = stations
         self.current_offset = 0
         self._apply_filters()
-        self._update_favorites_list()
         self.set_status(f"Loaded {len(stations)} stations")
 
     def _on_more_stations_loaded(self, more):
@@ -631,7 +629,7 @@ class RadioPlayerFrame(wx.Frame):
             self.orb_api.start_now_playing_poll(station._orb_cs, self._on_metadata)
 
     def stop_playback(self):
-        if self.is_playing or self.radio:
+        if self.is_playing:
             self.radio.stop()
             self.is_playing = False
             self.play_stop_btn.SetLabel("&Play")
@@ -668,6 +666,7 @@ class RadioPlayerFrame(wx.Frame):
     def on_volume_change(self, event):
         if not self.is_muted:
             self.volume = self.volume_slider.GetValue() / 100.0
+            self.settings["volume"] = self.volume_slider.GetValue()
             self.radio.set_volume(self.volume)
 
     def on_mute_toggle(self, event):
@@ -831,7 +830,7 @@ class RadioPlayerFrame(wx.Frame):
             "Accessible radio player with Radio Browser and Online Radio Box support.\n\n"
             "Now Playing metadata, ICY stream tags, and screen reader integration."
         )
-        info.SetWebSite("https://github.com/GruiaChiscop/radio-browser-accessible-desktop-app")
+        info.SetWebSite("https://github.com/GruiaChiscop/radio-browser-app")
         wx.adv.AboutBox(info)
 
     def on_help(self, event):
@@ -849,11 +848,12 @@ class RadioPlayerFrame(wx.Frame):
         wx.MessageBox(help_text, "Keyboard Shortcuts", wx.OK | wx.ICON_INFORMATION)
 
     def on_exit(self, event):
-        if self.is_playing:
-            self.radio.stop()
         if self.recording:
             self._stop_recording()
+        self.radio.close()
         self.orb_api.close()
+        self.app_updater.cleanup()
+        self._save_settings()
         self.Close()
 
     # ------------------------------------------------------------------
@@ -870,6 +870,8 @@ class RadioPlayerFrame(wx.Frame):
         elif keycode == wx.WXK_F3:
             if _ao:
                 _ao.output(self.GetStatusBar().GetStatusText())
+        elif keycode == wx.WXK_SPACE:
+            self.on_play_stop_toggle(None)
         else:
             event.Skip()
 
