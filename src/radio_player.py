@@ -95,8 +95,9 @@ class RadioPlayer:
                     except Exception:
                         pass
                     self.stream = None
-                # Error 40 = BASS_ERROR_TIMEOUT: retry automatically
-                if getattr(e, "code", None) == 40 or str(e).startswith("40,"):
+                # Error 40 = BASS_ERROR_TIMEOUT, error 2 = BASS_ERROR_FILEOPEN: retry automatically
+                code = getattr(e, "code", None)
+                if code in (2, 40) or str(e).startswith(("2,", "40,")):
                     last_error = e
                     continue
                 self.on_error(f"Could not play stream: {e}")
