@@ -314,7 +314,14 @@ class RadioPlayerFrame(wx.Frame):
         if os.path.exists(favorites_file):
             try:
                 with open(favorites_file, "r") as f:
-                    self.favorites = [RadioStation(item) for item in json.load(f)]
+                    self.favorites = []
+                    for item in json.load(f):
+                        source = item.get("source", "radiobrowser")
+                        station = RadioStation(item, source=source)
+                        if source == "onlineradiobox":
+                            station._orb_page_url = item.get("_orb_page_url", item.get("url", ""))
+                            station._orb_cs = item.get("_orb_cs", "")
+                        self.favorites.append(station)
                 if hasattr(self, "favorites_list"):
                     self._update_favorites_list()
             except Exception as e:
@@ -325,7 +332,8 @@ class RadioPlayerFrame(wx.Frame):
         try:
             data = []
             for fav in self.favorites:
-                data.append({
+                entry = {
+                    "source": getattr(fav, "source", "radiobrowser"),
                     "name": fav.name,
                     "url": fav.url,
                     "country": fav.country,
@@ -340,7 +348,11 @@ class RadioPlayerFrame(wx.Frame):
                     "geo_long": getattr(fav, "geo_long", None),
                     "city": getattr(fav, "city", ""),
                     "location": fav.location,
-                })
+                }
+                if getattr(fav, "source", "") == "onlineradiobox":
+                    entry["_orb_page_url"] = getattr(fav, "_orb_page_url", fav.url)
+                    entry["_orb_cs"] = getattr(fav, "_orb_cs", "")
+                data.append(entry)
             with open(favorites_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
@@ -763,9 +775,9 @@ class RadioPlayerFrame(wx.Frame):
         add_fav_item = menu.Append(wx.ID_ANY, "Add to Favourites")
         copy_url_item = menu.Append(wx.ID_ANY, "Copy Stream URL")
 
-        self.Bind(wx.EVT_MENU, lambda e: self.play_station(station), play_item)
-        self.Bind(wx.EVT_MENU, lambda e: self.add_to_favorites(station), add_fav_item)
-        self.Bind(wx.EVT_MENU, lambda e: self._copy_url(station.url), copy_url_item)
+        menu.Bind(wx.EVT_MENU, lambda e: self.play_station(station), play_item)
+        menu.Bind(wx.EVT_MENU, lambda e: self.add_to_favorites(station), add_fav_item)
+        menu.Bind(wx.EVT_MENU, lambda e: self._copy_url(station.url), copy_url_item)
 
         pos = event.GetPosition()
         if pos == wx.DefaultPosition:
@@ -786,9 +798,9 @@ class RadioPlayerFrame(wx.Frame):
         remove_item = menu.Append(wx.ID_ANY, "Remove from Favorites")
         copy_url_item = menu.Append(wx.ID_ANY, "Copy Stream URL")
 
-        self.Bind(wx.EVT_MENU, lambda e: self.play_station(station), play_item)
-        self.Bind(wx.EVT_MENU, lambda e: self.remove_from_favorites(idx), remove_item)
-        self.Bind(wx.EVT_MENU, lambda e: self._copy_url(station.url), copy_url_item)
+        menu.Bind(wx.EVT_MENU, lambda e: self.play_station(station), play_item)
+        menu.Bind(wx.EVT_MENU, lambda e: self.remove_from_favorites(idx), remove_item)
+        menu.Bind(wx.EVT_MENU, lambda e: self._copy_url(station.url), copy_url_item)
 
         pos = event.GetPosition()
         if pos == wx.DefaultPosition:
@@ -873,7 +885,11 @@ class RadioPlayerFrame(wx.Frame):
             if _ao:
                 _ao.output(self.GetStatusBar().GetStatusText())
         elif keycode == wx.WXK_SPACE:
-            self.on_play_stop_toggle(None)
+            focused = self.FindFocus()
+            if isinstance(focused, (wx.TextCtrl, wx.SearchCtrl, wx.ComboBox)):
+                event.Skip()
+            else:
+                self.on_play_stop_toggle(None)
         else:
             event.Skip()
 
