@@ -22,7 +22,7 @@ if _ao.is_system_output():
     _ao = None
 
 APP_VERSION = "1.2.0"
-UPDATE_URL = "https://api.github.com/repos/GruiaChiscop/radio-browser-accessible-desktop-app/releases/latest"
+UPDATE_URL = "https://api.github.com/repos/GruiaChiscop/radio-browser-app/releases/latest"
 
 # Cross-platform app data directory (Windows: %LOCALAPPDATA%, macOS: ~/Library/Application Support, Linux: ~/.local/share)
 APP_DATA_DIR = user_data_dir("RadioBrowserPlayer", "GruiaChiscop")

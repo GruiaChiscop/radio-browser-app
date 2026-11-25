@@ -221,36 +221,77 @@ class AppUpdater:
                 )
             return None
 
-        # Pick the best asset for the current platform
         system = platform.system()
         assets = data.get("assets", [])
+
+        # Known release binary names produced by CI
+        platform_binary = {
+            "Windows": "radio_browser.exe",
+            "Darwin": "radio_browser_mac",
+            "Linux": "radio_browser_linux",
+        }
+        # Extension-based fallback (e.g. future .dmg/.AppImage releases)
+        ext_fallback = {"Windows": ".exe", "Darwin": ".dmg", "Linux": ".appimage"}
+
+        wanted_name = platform_binary.get(system, "")
+        wanted_ext = ext_fallback.get(system, ".bin")
+
+        asset_by_name = {a.get("name", "").lower(): a for a in assets}
+
         download_url = ""
         size = 0
-        ext_map = {"Windows": ".exe", "Darwin": ".dmg", "Linux": ".AppImage"}
-        wanted_ext = ext_map.get(system, ".bin")
+        checksum = ""
 
-        for asset in assets:
-            name = asset.get("name", "").lower()
-            if name.endswith(wanted_ext.lower()):
-                download_url = asset.get("browser_download_url", "")
-                size = asset.get("size", 0)
-                break
+        # 1. Exact name match (CI-produced binaries)
+        if wanted_name and wanted_name.lower() in asset_by_name:
+            asset = asset_by_name[wanted_name.lower()]
+            download_url = asset.get("browser_download_url", "")
+            size = asset.get("size", 0)
+            sha_name = wanted_name.lower() + ".sha256"
+            if sha_name in asset_by_name:
+                sha_url = asset_by_name[sha_name].get("browser_download_url", "")
+                checksum = self._fetch_sha256(sha_url)
 
-        # Fall back to the first asset if nothing matched
-        if not download_url and assets:
-            download_url = assets[0].get("browser_download_url", "")
-            size = assets[0].get("size", 0)
+        # 2. Extension-based match (skip .sha256 sidecar files)
+        if not download_url:
+            for asset in assets:
+                name = asset.get("name", "").lower()
+                if name.endswith(wanted_ext) and not name.endswith(".sha256"):
+                    download_url = asset.get("browser_download_url", "")
+                    size = asset.get("size", 0)
+                    break
+
+        # 3. First non-sha256 asset as last resort
+        if not download_url:
+            for asset in assets:
+                name = asset.get("name", "").lower()
+                if not name.endswith(".sha256"):
+                    download_url = asset.get("browser_download_url", "")
+                    size = asset.get("size", 0)
+                    break
 
         changelog = data.get("body", "See the GitHub release page for details.")
-        # GitHub release bodies often contain Markdown — keep them as-is
         return UpdateInfo(
             version=latest_version,
             download_url=download_url,
             changelog=changelog,
             size=size,
-            checksum="",
+            checksum=checksum,
             required=False,
         )
+
+    def _fetch_sha256(self, sha_url: str) -> str:
+        """Download a .sha256 sidecar file and return the hex digest."""
+        try:
+            resp = requests.get(
+                sha_url, timeout=10,
+                headers={"User-Agent": f"{self.app_name}/{self.current_version}"},
+            )
+            resp.raise_for_status()
+            # Format: "<hash>  <filename>"
+            return resp.text.split()[0].strip().lower()
+        except Exception:
+            return ""
 
     def _parse_legacy_format(self, data: dict, show_no_update: bool) -> Optional[UpdateInfo]:
         latest_version = data.get("version", "")
@@ -410,8 +451,22 @@ class AppUpdater:
         return True
 
     def _install_macos(self, update_file: str) -> bool:
-        if not update_file.endswith(".dmg"):
-            return False
+        if update_file.endswith(".dmg"):
+            return self._install_macos_dmg(update_file)
+        # Plain binary (CI-produced radio_browser_mac)
+        current_exe = sys.executable
+        script = os.path.join(self.temp_dir, "update.sh")
+        with open(script, "w") as f:
+            f.write("#!/bin/bash\nsleep 2\n")
+            f.write(f'rm -f "{current_exe}"\n')
+            f.write(f'mv "{update_file}" "{current_exe}"\n')
+            f.write(f'chmod +x "{current_exe}"\n')
+            f.write(f'"{current_exe}" &\n')
+        os.chmod(script, 0o755)
+        subprocess.Popen(["bash", script])
+        return True
+
+    def _install_macos_dmg(self, update_file: str) -> bool:
         mount_pt = os.path.join(self.temp_dir, "mount")
         os.makedirs(mount_pt, exist_ok=True)
         subprocess.run(["hdiutil", "attach", update_file, "-mountpoint", mount_pt], check=True)
@@ -430,7 +485,7 @@ class AppUpdater:
             f.write(f'hdiutil detach "{mount_pt}"\n')
             f.write(f'open "{current_app}"\n')
         os.chmod(script, 0o755)
-        subprocess.Popen([script])
+        subprocess.Popen(["bash", script])
         return True
 
     def _install_linux(self, update_file: str) -> bool:
