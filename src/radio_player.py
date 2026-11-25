@@ -60,31 +60,61 @@ class RadioPlayer:
         self._metadata_thread = None
 
     def _play_internal(self, url: str):
-        try:
-            self.state = PlayerState.CONNECTING
+        last_error = None
+        for attempt in range(3):
+            if attempt > 0:
+                if self.state == PlayerState.STOPPED:
+                    return
+                time.sleep(1.5)
             try:
-                self.stream = URLStream(url)
-            except BassError as e:
-                # Error 41 = BASS_ERROR_FILEFORM: server returned a playlist
-                # (M3U/PLS) instead of a raw stream. Try to resolve it.
-                if getattr(e, "code", None) == 41 or str(e).startswith("41,"):
-                    resolved = _resolve_playlist(url)
-                    if resolved and resolved != url:
-                        self.current_url = resolved
-                        self.stream = URLStream(resolved)
+                self.state = PlayerState.CONNECTING
+                try:
+                    self.stream = URLStream(url)
+                except BassError as e:
+                    # Error 41 = BASS_ERROR_FILEFORM: server returned a playlist
+                    # (M3U/PLS) instead of a raw stream. Try to resolve it.
+                    if getattr(e, "code", None) == 41 or str(e).startswith("41,"):
+                        resolved = _resolve_playlist(url)
+                        if resolved and resolved != url:
+                            self.current_url = resolved
+                            self.stream = URLStream(resolved)
+                        else:
+                            raise
                     else:
                         raise
-                else:
-                    raise
-            self.stream.set_volume(self.volume)
-            self.stream.play()
-            time.sleep(0.2)
-            self.state = PlayerState.PLAYING
-            self._start_metadata_thread()
-        except Exception as e:
-            self.on_error(f"Could not play stream: {e}")
-            self.state = PlayerState.IDLE
-            self.stream = None
+                self.stream.set_volume(self.volume)
+                self.stream.play()
+                time.sleep(0.2)
+                self.state = PlayerState.PLAYING
+                self._start_metadata_thread()
+                return
+            except BassError as e:
+                if self.stream is not None:
+                    try:
+                        self.stream.free()
+                    except Exception:
+                        pass
+                    self.stream = None
+                # Error 40 = BASS_ERROR_TIMEOUT: retry automatically
+                if getattr(e, "code", None) == 40 or str(e).startswith("40,"):
+                    last_error = e
+                    continue
+                self.on_error(f"Could not play stream: {e}")
+                self.state = PlayerState.IDLE
+                return
+            except Exception as e:
+                if self.stream is not None:
+                    try:
+                        self.stream.free()
+                    except Exception:
+                        pass
+                    self.stream = None
+                self.on_error(f"Could not play stream: {e}")
+                self.state = PlayerState.IDLE
+                return
+        self.on_error(f"Could not play stream: {last_error}")
+        self.state = PlayerState.IDLE
+        self.stream = None
 
     def play(self, url: str):
         self.stop()
