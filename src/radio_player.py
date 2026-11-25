@@ -105,6 +105,8 @@ class RadioPlayer:
                 self._start_metadata_thread()
                 return
             except BassError as e:
+                if self._is_stale(gen):
+                    return
                 if self.stream is not None:
                     try:
                         self.stream.free()
@@ -120,6 +122,8 @@ class RadioPlayer:
                 self.state = PlayerState.IDLE
                 return
             except Exception as e:
+                if self._is_stale(gen):
+                    return
                 if self.stream is not None:
                     try:
                         self.stream.free()
@@ -129,9 +133,15 @@ class RadioPlayer:
                 self.on_error(f"Could not play stream: {e}")
                 self.state = PlayerState.IDLE
                 return
+        if self._is_stale(gen):
+            return
         self.on_error(f"Could not play stream: {last_error}")
         self.state = PlayerState.IDLE
         self.stream = None
+
+    def _is_stale(self, gen: int) -> bool:
+        with self._gen_lock:
+            return gen != self._play_gen
 
     def play(self, url: str):
         self.stop()
@@ -143,6 +153,8 @@ class RadioPlayer:
         t.start()
 
     def stop(self):
+        with self._gen_lock:
+            self._play_gen += 1
         self._stop_metadata_thread()
         self.state = PlayerState.STOPPED
         if self.stream is not None:
