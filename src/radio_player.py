@@ -125,6 +125,14 @@ class RadioPlayer:
     def set_metadata_callback(self, callback):
         self.metadata_callback = callback
 
+    def set_buffer_size(self, ms: int):
+        """Set the BASS network buffer size (BASS_CONFIG_NET_BUFFER = 20)."""
+        try:
+            from sound_lib.main import bass
+            bass.BASS_SetConfig(20, max(500, min(5000, int(ms))))
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # ICY metadata thread
     # ------------------------------------------------------------------

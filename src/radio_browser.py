@@ -61,6 +61,7 @@ class RadioPlayerFrame(wx.Frame):
         self.radio.set_metadata_callback(self._on_metadata)
         self.radio.on_error = lambda msg: wx.CallAfter(self.set_status, msg)
         self.radio.set_volume(self.volume)
+        self.radio.set_buffer_size(self.settings.get("buffer_size", 1000))
 
         self.rb_api.on_servers_set = lambda msg: self.set_status(msg)
         self.rb_api.on_error = lambda msg: self.set_status(msg)
@@ -467,6 +468,8 @@ class RadioPlayerFrame(wx.Frame):
         self.current_offset = 0
         self._apply_filters()
         self.set_status(f"Loaded {len(stations)} stations")
+        if self.settings.get("autoplay") and self.filtered_stations and not self.is_playing:
+            self.play_station(self.filtered_stations[0])
 
     def _on_more_stations_loaded(self, more):
         self.load_more_btn.Enable(True)
@@ -827,6 +830,7 @@ class RadioPlayerFrame(wx.Frame):
             self.settings = dlg.settings
             self.settings["best_bitrate_only"] = self.best_bitrate_only_cb.GetValue()
             self._save_settings()
+            self.radio.set_buffer_size(self.settings.get("buffer_size", 1000))
             self.set_status("Settings saved")
             # Reload filter dropdowns if the data source changed
             if self._active_source != old_source:
