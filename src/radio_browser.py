@@ -630,16 +630,16 @@ class RadioPlayerFrame(wx.Frame):
 
     def _do_play_station(self, station: RadioStation):
         self.current_station = station
-        self.now_playing_label.SetLabel(f"Playing: {station.name} ({station.location})")
+        self.now_playing_label.SetLabel(f"Connecting: {station.name}…")
         self.stream_url_box.SetValue(station.url)
 
-        if self.is_playing:
-            self.radio.stop()
-            self.orb_api.stop_now_playing_poll()
+        self.radio.stop()
+        self.orb_api.stop_now_playing_poll()
 
         self.radio.play(station.url)
         self.is_playing = True
         self.play_stop_btn.SetLabel("&Stop")
+        self.now_playing_label.SetLabel(f"Playing: {station.name} ({station.location})")
         self.set_status(f"Playing {station.name}")
 
         # Start OnlineRadioBox now-playing poll if applicable

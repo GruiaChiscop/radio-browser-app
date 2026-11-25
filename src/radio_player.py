@@ -58,18 +58,24 @@ class RadioPlayer:
 
         self._stop_metadata = threading.Event()
         self._metadata_thread = None
+        self._play_gen = 0
+        self._gen_lock = threading.Lock()
 
-    def _play_internal(self, url: str):
+    def _play_internal(self, url: str, gen: int):
         last_error = None
         for attempt in range(3):
             if attempt > 0:
                 if self.state == PlayerState.STOPPED:
                     return
+                with self._gen_lock:
+                    if gen != self._play_gen:
+                        return  # superseded by a newer play() call
                 time.sleep(1.5)
             try:
                 self.state = PlayerState.CONNECTING
+                # Open the stream into a local variable first
                 try:
-                    self.stream = URLStream(url)
+                    new_stream = URLStream(url)
                 except BassError as e:
                     # Error 41 = BASS_ERROR_FILEFORM: server returned a playlist
                     # (M3U/PLS) instead of a raw stream. Try to resolve it.
@@ -77,11 +83,21 @@ class RadioPlayer:
                         resolved = _resolve_playlist(url)
                         if resolved and resolved != url:
                             self.current_url = resolved
-                            self.stream = URLStream(resolved)
+                            url = resolved
+                            new_stream = URLStream(resolved)
                         else:
                             raise
                     else:
                         raise
+                # Check generation AFTER the slow network open — may have been superseded
+                with self._gen_lock:
+                    if gen != self._play_gen:
+                        try:
+                            new_stream.free()
+                        except Exception:
+                            pass
+                        return
+                    self.stream = new_stream
                 self.stream.set_volume(self.volume)
                 self.stream.play()
                 time.sleep(0.2)
@@ -119,8 +135,11 @@ class RadioPlayer:
 
     def play(self, url: str):
         self.stop()
+        with self._gen_lock:
+            self._play_gen += 1
+            gen = self._play_gen
         self.current_url = url
-        t = threading.Thread(target=self._play_internal, args=(url,), daemon=True)
+        t = threading.Thread(target=self._play_internal, args=(url, gen), daemon=True)
         t.start()
 
     def stop(self):
